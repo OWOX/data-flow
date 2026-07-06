@@ -1,0 +1,6 @@
+node_modules
+dist
+owox.dev.json
+.owox-dev
+*.log
+.DS_Store

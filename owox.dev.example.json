@@ -1,0 +1,9 @@
+{
+  "_readme": "Copy to owox.dev.json (gitignored) for `npm run dev:broker`. NEVER commit owox.dev.json.",
+  "owox": { "apiUrl": "http://localhost:3000", "apiKey": "" },
+  "credentials": [
+    { "type": "ai-provider", "secret": "", "config": { "baseUrl": "https://openrouter.ai/api/v1" } }
+  ],
+  "settings": { "global": {}, "byProject": {} },
+  "ports": { "ui": 5177, "broker": 5178 }
+}
