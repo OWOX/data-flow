@@ -161,8 +161,7 @@ type Selection =
 
 // Titles shown in the right Sheet header per active panel.
 const SHEET_TITLES: Record<NonNullable<ReturnType<typeof useRightPanel>["active"]>, string> = {
-  inspect: "Inspect", models: "My Models", history: "Version history",
-  share: "Share model", enable: "Enable Model Canvas", account: "Account",
+  inspect: "Inspect", share: "Share model",
 };
 
 // ── Inner canvas (needs ReactFlowProvider context) ────────────────────────────
@@ -568,11 +567,6 @@ function CanvasInner() {
         onOpenGoal={() => setShowGoal(true)}
         goalSet={!!goal}
         questionsEnabled={questionsEnabled}
-        // The host always brokers an OWOX project session, so the top bar's
-        // signed-in chrome (storage picker, push menu) is always shown here;
-        // TopBar itself sheds the auth-era props in Task 8.
-        signedIn
-        modelName={modelName}
       />
       {shareToast && <ShareToast message={shareToast} onClose={() => setShareToast(null)} />}
       {pushing && (
@@ -601,9 +595,6 @@ function CanvasInner() {
           storage={storages.find(s => s.id === graph.storageId) ?? null}
           counts={pushPreview(graph, graph.storageId)}
           onConfirm={() => { setShowPushConfirm(false); void runPush(); }}
-          // "Change project" (sign out + re-connect) has no meaning once the host
-          // brokers the OWOX session — PushConfirmDialog drops this control in Task 8.
-          onChangeProject={() => {}}
           onClose={() => setShowPushConfirm(false)}
         />
       )}
@@ -759,10 +750,7 @@ function CanvasInner() {
             />
           )}
         </ModelSheet>
-        {/* signedIn is a vestigial required prop on RightRail (unused inside it,
-            reserved for later gating) — trimmed away in Task 8 along with the
-            rest of RightRail's auth-era surface. */}
-        <RightRail active={panel.active} onOpen={handleRailOpen} signedIn highlightId={visualRailId} />
+        <RightRail active={panel.active} onOpen={handleRailOpen} highlightId={visualRailId} />
       </div>
     </div>
   );

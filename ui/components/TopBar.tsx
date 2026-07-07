@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Download, Upload, ChevronDown, Target, FileText, Image as ImageIcon } from "lucide-react";
-import { ProjectIcon, StorageIcon, LibraryIcon } from "../lib/icons";
-import { EnableControl } from "./EnableControl";
+import { StorageIcon, LibraryIcon } from "../lib/icons";
 
 // First-visit onboarding hint pointing at the Library. Persisted so it only
 // ever shows once per browser; dismissed as soon as the user hovers it.
@@ -23,22 +22,9 @@ export interface TopBarProps {
   shareDisabled?: boolean;
   onPush?: () => void;
   onLibrary?: () => void;
-  signedIn: boolean;
-  projectTitle?: string;
   onOpenGoal?: () => void;
   goalSet?: boolean;
   questionsEnabled?: boolean;
-  // Model name — passed to EnableControl as subtext when signed in.
-  modelName?: string;
-  // Supabase account ("Save"). Independent of the OWOX connect/sign-in above.
-  supabaseEnabled?: boolean;
-  accountEmail?: string | null;
-  onSave?: () => void;
-  saving?: boolean;
-  // Save state caption under the Save button: "saved" | "unsaved" | null (hidden).
-  saveState?: "saved" | "unsaved" | null;
-  // Opens the Enable (signed-out) or Account (signed-in) Sheet panel.
-  onEnable?: () => void;
 }
 
 const LOGO = (
@@ -68,11 +54,7 @@ export function TopBar({
   pendingCount = 0, storages = [], storageId, onStorageChange,
   onImport, onImportFromOwox, onExport, onExportSvg, exportDisabled = false,
   onPush, onLibrary,
-  signedIn, projectTitle,
   onOpenGoal, goalSet = false, questionsEnabled = false,
-  modelName,
-  supabaseEnabled = false, accountEmail,
-  onEnable,
 }: TopBarProps) {
   // Push split-button menu (holds the signed-in "Import from OWOX project" action).
   const [menuOpen, setMenuOpen] = useState(false);
@@ -120,27 +102,18 @@ export function TopBar({
         </button>
       )}
 
-      {/* Project picker chip */}
-      {signedIn && (
-        <button className="flex items-center gap-[7px] text-[13px] text-slate-500 border border-[#d8dee8] rounded-lg px-[10px] py-[5px] bg-white cursor-pointer hover:bg-[#f1f3f7]">
-          <ProjectIcon size={14} /> Project: <span className="text-slate-900 font-semibold">{projectTitle ?? "—"}</span> ▾
-        </button>
-      )}
-
       {/* Storage picker — one storage per model (joinable requires same storage) */}
-      {signedIn && (
-        <label className="flex items-center gap-[7px] text-[13px] text-slate-500 border border-[#d8dee8] rounded-lg px-[10px] py-[5px] bg-white" title="One storage per model — joinable relationships require all marts on the same storage">
-          <StorageIcon size={14} /> Storage:
-          <select
-            value={storageId ?? ""}
-            onChange={e => onStorageChange?.(e.target.value)}
-            className="text-slate-900 font-semibold bg-white outline-none cursor-pointer"
-          >
-            {storages.length === 0 && <option value="">—</option>}
-            {storages.map(s => <option key={s.id} value={s.id}>{s.title}</option>)}
-          </select>
-        </label>
-      )}
+      <label className="flex items-center gap-[7px] text-[13px] text-slate-500 border border-[#d8dee8] rounded-lg px-[10px] py-[5px] bg-white" title="One storage per model — joinable relationships require all marts on the same storage">
+        <StorageIcon size={14} /> Storage:
+        <select
+          value={storageId ?? ""}
+          onChange={e => onStorageChange?.(e.target.value)}
+          className="text-slate-900 font-semibold bg-white outline-none cursor-pointer"
+        >
+          {storages.length === 0 && <option value="">—</option>}
+          {storages.map(s => <option key={s.id} value={s.id}>{s.title}</option>)}
+        </select>
+      </label>
 
       <div className="flex-1" />
 
@@ -206,57 +179,42 @@ export function TopBar({
 
       {/* Share and Save both live in the right rail now — no top-bar buttons. */}
 
-      {/* Push to OWOX — split button: primary push + caret menu (signed-in only)
-          holding the less-common "Import from OWOX project" action. */}
+      {/* Push to OWOX — split button: primary push + caret menu holding the
+          less-common "Import from OWOX project" action. */}
       <div className="relative flex items-center">
         <button
           onClick={onPush}
-          className={`text-[13px] font-[550] bg-[#1e88e5] text-white border border-[#1e88e5] px-3 py-[7px] cursor-pointer flex items-center gap-[6px] hover:bg-[#1976d2] ${signedIn ? "rounded-l-lg border-r-0" : "rounded-lg"}`}
+          className="text-[13px] font-[550] bg-[#1e88e5] text-white border border-[#1e88e5] px-3 py-[7px] cursor-pointer flex items-center gap-[6px] hover:bg-[#1976d2] rounded-l-lg border-r-0"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} width={15} height={15}>
             <path d="M5 12h14M13 6l6 6-6 6"/>
           </svg>
           Push to OWOX{pendingCount > 0 && <span className="opacity-80">({pendingCount})</span>}
         </button>
-        {signedIn && (
+        <button
+          onClick={() => setMenuOpen(o => !o)}
+          aria-label="More OWOX actions"
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          className="text-white bg-[#1e88e5] border border-[#1e88e5] border-l border-l-[#4d97e8] rounded-r-lg px-[7px] py-[9px] cursor-pointer hover:bg-[#1976d2] flex items-center"
+        >
+          <ChevronDown size={15} />
+        </button>
+        {menuOpen && (
           <>
-            <button
-              onClick={() => setMenuOpen(o => !o)}
-              aria-label="More OWOX actions"
-              aria-haspopup="menu"
-              aria-expanded={menuOpen}
-              className="text-white bg-[#1e88e5] border border-[#1e88e5] border-l border-l-[#4d97e8] rounded-r-lg px-[7px] py-[9px] cursor-pointer hover:bg-[#1976d2] flex items-center"
-            >
-              <ChevronDown size={15} />
-            </button>
-            {menuOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-                <div role="menu" className="absolute top-[calc(100%+6px)] right-0 z-50 w-[230px] rounded-lg border border-[#d8dee8] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.18)] py-1">
-                  <button
-                    role="menuitem"
-                    onClick={() => { setMenuOpen(false); onImportFromOwox?.(); }}
-                    className="w-full text-left text-[13px] text-slate-900 px-3 py-2 cursor-pointer flex items-center gap-[8px] hover:bg-[#f1f3f7]"
-                  >
-                    <Download size={15} /> Import from OWOX project
-                  </button>
-                </div>
-              </>
-            )}
+            <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+            <div role="menu" className="absolute top-[calc(100%+6px)] right-0 z-50 w-[230px] rounded-lg border border-[#d8dee8] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.18)] py-1">
+              <button
+                role="menuitem"
+                onClick={() => { setMenuOpen(false); onImportFromOwox?.(); }}
+                className="w-full text-left text-[13px] text-slate-900 px-3 py-2 cursor-pointer flex items-center gap-[8px] hover:bg-[#f1f3f7]"
+              >
+                <Download size={15} /> Import from OWOX project
+              </button>
+            </div>
           </>
         )}
       </div>
-
-      {/* Enable control — opens the Enable (signed-out) or Account (signed-in)
-          Sheet panel. Replaces the old OWOX sign-in button and account chip.
-          Shown only when Supabase is configured. */}
-      {supabaseEnabled && (
-        <EnableControl
-          signedIn={!!accountEmail}
-          modelName={modelName}
-          onClick={onEnable ?? (() => {})}
-        />
-      )}
     </div>
   );
 }

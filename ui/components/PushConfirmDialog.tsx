@@ -3,14 +3,13 @@ interface PushConfirmDialogProps {
   storage?: { title: string; type: string } | null;
   counts: { marts: number; relationships: number };
   onConfirm: () => void;        // proceed with the push
-  onChangeProject: () => void;  // sign out (detaches from OWOX) + open sign-in
   onClose: () => void;          // cancel
 }
 
 // Confirmation before pushing: shows exactly which project + storage the marts
 // will land in (the user kept pushing to the wrong storage), plus how many marts
-// and relationships will be sent. "Change project" detaches and re-signs-in.
-export function PushConfirmDialog({ projectTitle, storage, counts, onConfirm, onChangeProject, onClose }: PushConfirmDialogProps) {
+// and relationships will be sent.
+export function PushConfirmDialog({ projectTitle, storage, counts, onConfirm, onClose }: PushConfirmDialogProps) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
@@ -40,27 +39,19 @@ export function PushConfirmDialog({ projectTitle, storage, counts, onConfirm, on
           {counts.marts} {counts.marts === 1 ? "mart" : "marts"} and {counts.relationships} {counts.relationships === 1 ? "relationship" : "relationships"} will be pushed.
         </p>
 
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center justify-end gap-2">
           <button
-            onClick={onChangeProject}
-            className="text-[13px] font-[550] border border-[#d8dee8] bg-white text-slate-700 rounded-lg px-3 py-[7px] cursor-pointer hover:bg-[#f1f3f7]"
+            onClick={onClose}
+            className="text-[13px] font-[550] border border-[#d8dee8] bg-white text-slate-900 rounded-lg px-4 py-[7px] cursor-pointer hover:bg-[#f1f3f7]"
           >
-            Change project (sign out)
+            Cancel
           </button>
-          <div className="flex gap-2">
-            <button
-              onClick={onClose}
-              className="text-[13px] font-[550] border border-[#d8dee8] bg-white text-slate-900 rounded-lg px-4 py-[7px] cursor-pointer hover:bg-[#f1f3f7]"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={onConfirm}
-              className="text-[13px] font-[550] bg-[#1e88e5] text-white border border-[#1e88e5] rounded-lg px-4 py-[7px] cursor-pointer hover:bg-[#1976d2]"
-            >
-              Push
-            </button>
-          </div>
+          <button
+            onClick={onConfirm}
+            className="text-[13px] font-[550] bg-[#1e88e5] text-white border border-[#1e88e5] rounded-lg px-4 py-[7px] cursor-pointer hover:bg-[#1976d2]"
+          >
+            Push
+          </button>
         </div>
       </div>
     </div>
