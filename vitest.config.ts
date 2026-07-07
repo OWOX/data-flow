@@ -5,7 +5,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'happy-dom',
-    setupFiles: ['./src/test-setup.ts'],
+    setupFiles: ['./ui/test/setup.ts'],
     // Cap worker forks at 4 (hardware constraint) from BOTH ends. `--maxWorkers=4`
     // alone only lowers maxForks; minForks still defaults to the core count, and on
     // an 8+-core machine minForks(8) > maxForks(4) crashes Tinypool. Pin min low.

@@ -14,5 +14,5 @@
       "@owox/plugin-sdk": ["./ui/sdk-mock"]
     }
   },
-  "include": ["ui", "src"]
+  "include": ["ui"]
 }

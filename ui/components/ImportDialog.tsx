@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { Copy, Check } from "lucide-react";
 import { filesToGraph, parsePastedMarkdown, zipToFiles } from "../okf/io";
 import type { ModelGraph } from "../okf";
+import { OKF_GUIDE } from "../okfGuide";
 
 interface ImportDialogProps {
   onConfirm: (graph: ModelGraph, mode: "replace" | "merge") => void;
@@ -17,16 +18,19 @@ export function ImportDialog({ onConfirm, onClose }: ImportDialogProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Copy the AI authoring guide to the clipboard so the user can paste it into
-  // Claude/ChatGPT to generate an importable OKF model. Falls back to opening
-  // the raw guide if the clipboard is blocked.
+  // Claude/ChatGPT to generate an importable OKF model. The guide is bundled
+  // into the plugin as a string (../okfGuide) rather than fetched — the plugin
+  // iframe has no root-served public/ to fetch it from. Falls back to opening
+  // the guide as a blob if the clipboard is blocked.
   async function copyInstructions() {
     try {
-      const md = await fetch("/okf-format.md").then(r => r.text());
-      await navigator.clipboard.writeText(md);
+      await navigator.clipboard.writeText(OKF_GUIDE);
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
     } catch {
-      window.open("/okf-format.md", "_blank");
+      // Clipboard blocked → open the guide as a blob so the user can copy manually.
+      const url = URL.createObjectURL(new Blob([OKF_GUIDE], { type: "text/markdown" }));
+      window.open(url, "_blank");
     }
   }
 
@@ -76,26 +80,17 @@ export function ImportDialog({ onConfirm, onClose }: ImportDialogProps) {
           </button>
         </div>
 
-        {/* Generate a model with AI: copy the authoring guide → paste into
-            Claude/ChatGPT. The raw guide also lives at /okf-format.md so an
-            assistant can fetch it directly. */}
+        {/* Generate a model with AI: copy the authoring guide (bundled in
+            ../okfGuide) → paste into Claude/ChatGPT. */}
         <div className="-mt-1 flex flex-col gap-1.5 rounded-lg border border-[#e6e9f0] bg-[#f7f8fa] px-3 py-2.5">
           <span className="text-[12.5px] text-slate-600">No model yet? Generate one with AI:</span>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center">
             <button
               onClick={copyInstructions}
               className="flex items-center gap-[6px] rounded-lg bg-[#1e88e5] px-3 py-[6px] text-[12.5px] font-[550] text-white hover:bg-[#1976d2]"
             >
               {copied ? <><Check size={14} /> Copied — paste into Claude</> : <><Copy size={14} /> Copy AI instructions</>}
             </button>
-            <a
-              href="/ai-instructions.html"
-              target="_blank"
-              rel="noopener"
-              className="text-[12.5px] text-[#1e88e5] hover:text-[#1976d2] underline underline-offset-2"
-            >
-              View guide ↗
-            </a>
           </div>
         </div>
 
