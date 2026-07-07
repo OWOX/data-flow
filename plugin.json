@@ -1,7 +1,7 @@
 {
   "id": "model-canvas",
   "name": "Model Canvas",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "ui": { "entry": "ui/index.html" },
   "menu": [{ "title": "Model Canvas", "path": "" }],
   "settings": [],
