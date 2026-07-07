@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { ModelNode, ModelEdge } from "@mc/okf";
+import * as sdk from "@owox/plugin-sdk";
 import { buildFocus, focusCacheKey, getQuestions, AiLimitError, __clearCache } from "./questions";
 
 const mart = (key: string, title: string): ModelNode => ({
@@ -35,35 +36,44 @@ describe("focusCacheKey", () => {
 describe("getQuestions", () => {
   beforeEach(() => {
     __clearCache();
-    vi.spyOn(global, "fetch").mockImplementation(() =>
-      Promise.resolve(new Response(
-        JSON.stringify({ questions: [{ question: "Q", unlockedBy: "U" }] }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      )),
-    );
+    vi.spyOn(sdk.ai, "chat").mockResolvedValue({
+      text: JSON.stringify([{ question: "Q", unlockedBy: "U" }]),
+      model: "m",
+      raw: {},
+    });
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it("calls /api/questions and caches by focus+goal", async () => {
+  it("calls ai.chat and caches by focus+goal", async () => {
     const f = buildFocus(NODES, EDGES, "a");
     const a = await getQuestions(f, GOAL);
     const b = await getQuestions(f, GOAL); // served from cache
     expect(a).toEqual(b);
-    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(a).toEqual([{ question: "Q", unlockedBy: "U" }]);
+    expect(sdk.ai.chat).toHaveBeenCalledTimes(1);
   });
 
   it("force re-fetches even when cached", async () => {
     const f = buildFocus(NODES, EDGES, "a");
     await getQuestions(f, GOAL);
     await getQuestions(f, GOAL, { force: true });
-    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(sdk.ai.chat).toHaveBeenCalledTimes(2);
   });
 
-  it("throws AiLimitError when the API responds 429", async () => {
-    vi.spyOn(global, "fetch").mockResolvedValue(new Response(
-      JSON.stringify({ error: "ai_limit" }),
-      { status: 429, headers: { "Content-Type": "application/json" } },
-    ));
+  it("throws AiLimitError when the AI grant is denied", async () => {
+    vi.spyOn(sdk.ai, "chat").mockRejectedValue(Object.assign(new Error("denied"), { code: "GRANT_DENIED" }));
+    const f = buildFocus(NODES, EDGES, "a");
+    await expect(getQuestions(f, GOAL)).rejects.toBeInstanceOf(AiLimitError);
+  });
+
+  it("throws AiLimitError when there is no credential", async () => {
+    vi.spyOn(sdk.ai, "chat").mockRejectedValue(Object.assign(new Error("no cred"), { code: "NO_CREDENTIAL" }));
+    const f = buildFocus(NODES, EDGES, "a");
+    await expect(getQuestions(f, GOAL)).rejects.toBeInstanceOf(AiLimitError);
+  });
+
+  it("throws AiLimitError when the error status is 429", async () => {
+    vi.spyOn(sdk.ai, "chat").mockRejectedValue(Object.assign(new Error("rate limited"), { status: 429 }));
     const f = buildFocus(NODES, EDGES, "a");
     await expect(getQuestions(f, GOAL)).rejects.toBeInstanceOf(AiLimitError);
   });
