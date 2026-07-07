@@ -1,4 +1,4 @@
-import type { ModelGraph } from "@mc/okf";
+import type { ModelGraph } from "../okf";
 
 // The whole model lives in memory for the session, so a refresh or an
 // accidental tab close would otherwise wipe it. We mirror it into localStorage

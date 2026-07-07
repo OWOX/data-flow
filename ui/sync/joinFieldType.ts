@@ -1,4 +1,4 @@
-import type { ModelNode, ModelEdge } from "@mc/okf";
+import type { ModelNode, ModelEdge } from "../okf";
 
 // When a join key references a field that doesn't exist yet, we have to create
 // it. Defaulting to STRING breaks the join if the other side is e.g. an INTEGER

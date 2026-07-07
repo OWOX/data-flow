@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback, useEffect } from "react";
 import { PanelRightOpen } from "lucide-react";
-import type { ModelNode, ModelEdge } from "@mc/okf";
+import type { ModelNode, ModelEdge } from "../../okf";
 import { ObjectInspector } from "./ObjectInspector";
 import { RelationshipInspector } from "./RelationshipInspector";
 import { QuestionsPanel } from "./QuestionsPanel";

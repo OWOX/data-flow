@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { Copy, Check } from "lucide-react";
 import { filesToGraph, parsePastedMarkdown, zipToFiles } from "../okf/io";
-import type { ModelGraph } from "@mc/okf";
+import type { ModelGraph } from "../okf";
 
 interface ImportDialogProps {
   onConfirm: (graph: ModelGraph, mode: "replace" | "merge") => void;

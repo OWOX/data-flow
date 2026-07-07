@@ -1,4 +1,4 @@
-import type { ModelGraph } from "@mc/okf";
+import type { ModelGraph } from "../okf";
 import { TEMPLATES } from "../templates";
 
 // Deep-link: `model.owox.com/?template=<id>` opens a named built-in template

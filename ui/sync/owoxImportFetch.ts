@@ -1,6 +1,6 @@
 import { api } from '../lib/api';
 import type { ImportPayload, ImportMart, ImportRelationship } from './owoxImport';
-import type { InputSource } from '@mc/okf';
+import type { InputSource } from '../okf';
 
 const MAX_IMPORT = 100;
 

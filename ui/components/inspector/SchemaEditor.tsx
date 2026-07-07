@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { GripVertical } from "lucide-react";
-import type { SchemaField } from "@mc/okf";
+import type { SchemaField } from "../../okf";
 import { InfoTip } from "./InfoTip";
 
 // Canonical OWOX schema types — the set accepted across storages (BigQuery,

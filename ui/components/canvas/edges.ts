@@ -1,5 +1,5 @@
 import type { Edge } from "@xyflow/react";
-import type { ModelNode, ModelEdge } from "@mc/okf";
+import type { ModelNode, ModelEdge } from "../../okf";
 import type { ViewMode } from "../../state/viewMode";
 import type { RelLabelMode } from "../../state/relLabels";
 import { erdAwareNodeSize } from "./layoutSize";

@@ -1,5 +1,5 @@
 import { gzipSync, gunzipSync, strToU8, strFromU8 } from "fflate";
-import type { ModelGraph, ModelNode, ModelEdge } from "@mc/okf";
+import type { ModelGraph, ModelNode, ModelEdge } from "../okf";
 
 // Shareable model links. The whole model is gzip-compressed and packed into the
 // URL hash (#m=…) — no backend, fully anonymous, and the hash never leaves the

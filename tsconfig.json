@@ -11,8 +11,7 @@
     "types": ["vitest/globals", "@testing-library/jest-dom"],
     "baseUrl": ".",
     "paths": {
-      "@owox/plugin-sdk": ["./ui/sdk-mock"],
-      "@mc/okf": ["./ui/okf/index"]
+      "@owox/plugin-sdk": ["./ui/sdk-mock"]
     }
   },
   "include": ["ui", "src"]

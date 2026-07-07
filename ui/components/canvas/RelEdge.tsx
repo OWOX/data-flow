@@ -5,7 +5,7 @@ import {
   getBezierPath,
   type EdgeProps,
 } from "@xyflow/react";
-import type { ModelEdge } from "@mc/okf";
+import type { ModelEdge } from "../../okf";
 import { visibleKeys, showCardinality, type RelLabelMode } from "../../state/relLabels";
 
 export type RelEdgeData = Pick<ModelEdge, "keys" | "bidirectional" | "cardinality"> & {

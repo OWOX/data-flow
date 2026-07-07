@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { bundleToZip, zipToFiles, graphToBundleFiles } from "./io";
-import type { ModelGraph } from "@mc/okf";
+import type { ModelGraph } from "./index";
 
 describe("zip round-trip", () => {
   it("zips and unzips bundle files losslessly", () => {

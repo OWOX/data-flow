@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import type { ModelGraph } from "@mc/okf";
+import type { ModelGraph } from "../okf";
 import { buildImportPayload } from "../sync/owoxImportFetch";
 import type { StorageOption } from "./TopBar";
 import { payloadToGraph, type ImportPayload, type ImportFilter } from "../sync/owoxImport";

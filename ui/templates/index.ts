@@ -1,4 +1,4 @@
-import type { ModelGraph, ModelNode, ModelEdge, InputSource, SchemaField } from "@mc/okf";
+import type { ModelGraph, ModelNode, ModelEdge, InputSource, SchemaField } from "../okf";
 
 // ── tiny authoring helpers ─────────────────────────────────────────────────
 const f = (name: string, type: string, pk = false, description?: string): SchemaField =>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { ModelNode, ModelEdge } from "@mc/okf";
+import type { ModelNode, ModelEdge } from "../okf";
 import { joinFieldType, alignedJoinTypes } from "./joinFieldType";
 
 const nodes: ModelNode[] = [

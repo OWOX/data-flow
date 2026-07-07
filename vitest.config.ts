@@ -13,7 +13,6 @@ export default defineConfig({
     poolOptions: { forks: { minForks: 1, maxForks: 4 } },
     alias: {
       '@owox/plugin-sdk': new URL('./ui/sdk-mock.ts', import.meta.url).pathname,
-      '@mc/okf': new URL('./ui/okf/index.ts', import.meta.url).pathname,
     },
   },
 });

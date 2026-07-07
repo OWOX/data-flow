@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ChevronRight, ChevronDown } from "lucide-react";
-import type { ModelNode, InputSource, SchemaField } from "@mc/okf";
+import type { ModelNode, InputSource, SchemaField } from "../../okf";
 import { SchemaEditor } from "./SchemaEditor";
 import { InfoTip } from "./InfoTip";
 import { InputSourceIcon, OutputSchemaIcon } from "../../lib/icons";

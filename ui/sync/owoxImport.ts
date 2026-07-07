@@ -1,4 +1,4 @@
-import type { ModelGraph, ModelNode, ModelEdge, InputSource } from "@mc/okf";
+import type { ModelGraph, ModelNode, ModelEdge, InputSource } from "../okf";
 
 export type ImportFilter = "all" | "published" | "with-relationships";
 

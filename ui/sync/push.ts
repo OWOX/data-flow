@@ -1,6 +1,6 @@
 import type { ModelStore } from "../state/model";
 import { api as defaultApi } from "../lib/api";
-import { type ModelNode, type ModelGraph } from "@mc/okf";
+import { type ModelNode, type ModelGraph } from "../okf";
 import { joinFieldType, alignedJoinTypes } from "./joinFieldType";
 
 type Api = typeof defaultApi;

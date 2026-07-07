@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { diffGraphs } from "./diff";
-import type { ModelGraph, ModelNode } from "@mc/okf";
+import type { ModelGraph, ModelNode } from "../okf";
 
 const node = (key: string, title: string, fields: string[]): ModelNode => ({
   key, title, inputSource: "VIEW",

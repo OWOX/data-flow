@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { selectMartIds, payloadToGraph, mergeGraphs, type ImportPayload } from "./owoxImport";
-import type { ModelGraph } from "@mc/okf";
+import type { ModelGraph } from "../okf";
 
 const mart = (id: string, status: string) => ({ id, title: id, status, schema: [], inputSource: "SQL" as const, definition: null });
 const base: ImportPayload = {

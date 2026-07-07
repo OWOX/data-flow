@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { ModelNode, ModelEdge } from "@mc/okf";
+import type { ModelNode, ModelEdge } from "../../okf";
 import { buildRfEdges, isEdgeReconnectable } from "./edges";
 
 const field = (name: string) => ({ name, type: "STRING", pk: false });

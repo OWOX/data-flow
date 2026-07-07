@@ -1,7 +1,7 @@
 import { memo, useState } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { KeyRound, ChevronDown, ChevronRight } from "lucide-react";
-import type { ModelNode, SchemaField } from "@mc/okf";
+import type { ModelNode, SchemaField } from "../../okf";
 import type { ViewMode } from "../../state/viewMode";
 import { DataMartIcon } from "../../lib/icons";
 import { ERD_COLLAPSED_ROWS } from "./layoutSize";

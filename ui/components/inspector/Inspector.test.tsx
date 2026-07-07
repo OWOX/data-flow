@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
-import type { ModelNode } from "@mc/okf";
+import type { ModelNode } from "../../okf";
 import { Inspector } from "./Inspector";
 import * as qlib from "../../lib/questions";
 

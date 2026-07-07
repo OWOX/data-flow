@@ -1,5 +1,5 @@
 import { X, Rocket, Plus, Download, ExternalLink } from "lucide-react";
-import type { ModelGraph } from "@mc/okf";
+import type { ModelGraph } from "../okf";
 import { TEMPLATES } from "../templates";
 import { LibraryIcon } from "../lib/icons";
 import { IMPORT_GUIDE_URL } from "../lib/links";

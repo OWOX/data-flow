@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { Lightbulb } from "lucide-react";
-import type { ModelNode, ModelEdge } from "@mc/okf";
+import type { ModelNode, ModelEdge } from "../../okf";
 import type { BusinessGoal } from "../../state/goal";
 import { buildFocus, getQuestions, AiLimitError, type InsightQuestion } from "../../lib/questions";
 

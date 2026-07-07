@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import type { ModelNode, ModelEdge } from "@mc/okf";
+import type { ModelNode, ModelEdge } from "../okf";
 import * as sdk from "@owox/plugin-sdk";
 import { buildFocus, focusCacheKey, getQuestions, AiLimitError, __clearCache } from "./questions";
 

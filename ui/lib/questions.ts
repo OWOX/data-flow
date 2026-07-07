@@ -1,4 +1,4 @@
-import type { ModelNode, ModelEdge } from "@mc/okf";
+import type { ModelNode, ModelEdge } from "../okf";
 import type { BusinessGoal } from "../state/goal";
 import { ai } from "@owox/plugin-sdk";
 

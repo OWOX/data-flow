@@ -27,7 +27,7 @@ import { loadPersistedGraph, persistGraph } from "../../state/persist";
 import { loadViewMode, persistViewMode, type ViewMode } from "../../state/viewMode";
 import { loadRelLabelMode, persistRelLabelMode, type RelLabelMode } from "../../state/relLabels";
 import { loadModelName, persistModelName, DEFAULT_MODEL_NAME, templateModelName } from "../../state/modelName";
-import type { ModelNode, ModelEdge, ModelGraph } from "@mc/okf";
+import type { ModelNode, ModelEdge, ModelGraph } from "../../okf";
 
 import { graphToBundleFiles, downloadBundle } from "../../okf/io";
 import { buildShareUrl, readSharedModel, readSharedName, clearSharedModelFromUrl } from "../../share/url";

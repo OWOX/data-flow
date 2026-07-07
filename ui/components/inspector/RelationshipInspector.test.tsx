@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, fireEvent } from "@testing-library/react";
 import { RelationshipInspector } from "./RelationshipInspector";
-import type { ModelEdge, ModelNode } from "@mc/okf";
+import type { ModelEdge, ModelNode } from "../../okf";
 
 const from: ModelNode = { key: "tx", title: "Transactions", inputSource: "TABLE", status: "pending", owoxId: null, position: { x: 0, y: 0 }, schema: [{ name: "block_hash", type: "STRING", pk: true }] };
 const to: ModelNode = { key: "blocks", title: "Blocks", inputSource: "TABLE", status: "pending", owoxId: null, position: { x: 0, y: 0 }, schema: [{ name: "hash", type: "STRING", pk: true }] };

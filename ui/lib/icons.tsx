@@ -8,5 +8,4 @@ export {
   Columns3 as OutputSchemaIcon,
   Link2 as JoinIcon,
   Library as LibraryIcon,
-  Folder as ProjectIcon,
 } from "lucide-react";

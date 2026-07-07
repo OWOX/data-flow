@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { encodeModel, decodeModel, buildShareUrl, readSharedName } from "./url";
-import type { ModelGraph } from "@mc/okf";
+import type { ModelGraph } from "../okf";
 
 const graph: ModelGraph = {
   storageId: "s1",

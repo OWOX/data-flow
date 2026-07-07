@@ -1,4 +1,4 @@
-import type { ModelGraph } from "@mc/okf";
+import type { ModelGraph } from "../okf";
 
 // Structural diff between two model versions — what tables, fields and joins were
 // added or removed. Far more readable than a raw text diff, and it's exactly the

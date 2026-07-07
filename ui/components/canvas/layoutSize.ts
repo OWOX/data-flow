@@ -1,4 +1,4 @@
-import type { ModelNode } from "@mc/okf";
+import type { ModelNode } from "../../okf";
 import type { ViewMode } from "../../state/viewMode";
 
 const COMPACT = { width: 200, height: 90 };
