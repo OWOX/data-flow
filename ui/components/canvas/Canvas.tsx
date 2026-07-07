@@ -34,14 +34,8 @@ import { buildShareUrl, readSharedModel, readSharedName, clearSharedModelFromUrl
 import { readTemplateModel, clearTemplateFromUrl } from "../../lib/templateLink";
 import { exportCanvasSvg } from "../../share/exportImage";
 import { pushModel, pushPreview, type PushResult } from "../../sync/push";
-import { detachFromOwox } from "../../sync/detach";
 
 import { api } from "../../lib/api";
-import { useAuth } from "../../lib/auth";
-import { useAccount } from "../../lib/account";
-import { supabaseEnabled } from "../../lib/supabase";
-import { isAuthRedirecting } from "../../lib/authRedirect";
-import { createModel, updateModel, createVersion, listModels, loadModel, deleteModel, listVersions, loadVersion, type SavedModel, type ModelVersion } from "../../lib/models";
 import { TopBar, type StorageOption } from "../TopBar";
 import { ImportDialog } from "../ImportDialog";
 import { OwoxImportDialog } from "../OwoxImportDialog";
@@ -49,11 +43,8 @@ import { mergeGraphs } from "../../sync/owoxImport";
 import { LibraryDialog } from "../LibraryDialog";
 import { TemplateApplyDialog } from "../TemplateApplyDialog";
 import { WelcomeDialog } from "../WelcomeDialog";
-import { SignInModal } from "../SignInModal";
 import { PushConfirmDialog } from "../PushConfirmDialog";
 import { ClearCanvasDialog } from "../ClearCanvasDialog";
-import { NewModelDialog } from "../NewModelDialog";
-import { pushIntent } from "../../sync/pushGate";
 import { reconcileStorageId } from "../../sync/storageReconcile";
 import { Dock, type Tool } from "./Dock";
 import { MartNode } from "./MartNode";
@@ -63,13 +54,8 @@ import { erdAwareNodeSize } from "./layoutSize";
 import { Inspector } from "../inspector/Inspector";
 import { RightRail } from "../rail/RightRail";
 import { ModelSheet } from "../rail/ModelSheet";
-import { useRightPanel, gatedPanelId, type RightPanelId } from "../rail/useRightPanel";
-import { EnablePanel } from "../rail/EnablePanel";
-import { AccountPanel } from "../rail/AccountPanel";
-import { MyModelsPanel } from "../rail/MyModelsPanel";
-import { HistoryPanel } from "../rail/HistoryPanel";
+import { useRightPanel, type RightPanelId } from "../rail/useRightPanel";
 import { SharePanel } from "../rail/SharePanel";
-import { DiffDialog } from "../DiffDialog";
 import { GoalDialog } from "../GoalDialog";
 import { loadGoal, persistGoal, type BusinessGoal } from "../../state/goal";
 
@@ -204,14 +190,9 @@ function CanvasInner() {
   // dialog. And a session flag so the Insight-Questions hero prompt is dismissable.
   const [suggestedNiche, setSuggestedNiche] = useState<string | null>(null);
   const [heroDismissed, setHeroDismissed] = useState(false);
-  // Server tells us whether the Insight Questions feature is on (GEMINI_API_KEY
-  // set). Gates the Business Goal button so the feature is a pure env switch.
-  const [questionsEnabled, setQuestionsEnabled] = useState(false);
-  useEffect(() => {
-    api<{ questionsEnabled: boolean }>("/api/config")
-      .then(c => setQuestionsEnabled(!!c.questionsEnabled))
-      .catch(() => setQuestionsEnabled(false));
-  }, []);
+  // Insight Questions are available when an ai-provider credential was granted.
+  // Assume available; a denied grant degrades to the panel's "limit reached" state.
+  const questionsEnabled = true;
   const [tool, setTool] = useState<Tool>("select");
   const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode());
   const [relLabelMode, setRelLabelMode] = useState<RelLabelMode>(loadRelLabelMode());
@@ -231,60 +212,16 @@ function CanvasInner() {
   const [pushResult, setPushResult] = useState<PushResult | null>(null);
   const [shareToast, setShareToast] = useState<string | null>(null);
   const [storages, setStorages] = useState<StorageOption[]>([]);
-  const [signIn, setSignIn] = useState<{ mode: "connect" | "push" } | null>(null);
   const [showPushConfirm, setShowPushConfirm] = useState(false);
   const [showClear, setShowClear] = useState(false);
-  const [showNewModel, setShowNewModel] = useState(false);
-  const { me, connect, signOut } = useAuth();
-  // Supabase account ("Save your model") — independent of the OWOX connect above.
-  const { user: account, signOut: accountSignOut, signInWithGoogle, signInWithGitHub, signInWithEmail } = useAccount();
-  // Clear the gated highlight once the user signs in so the stale icon doesn't persist.
-  useEffect(() => { if (account) setVisualRailId(null); }, [account]);
-  // Close gated panels if the account disappears (sign-out, session expiry) so
-  // the user isn't left staring at an authenticated-only panel with no content.
-  useEffect(() => {
-    if (!account && (panel.active === "models" || panel.active === "history" || panel.active === "account")) {
-      panel.close();
-    }
-  }, [account, panel.active]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Load the saved models list whenever the My Models panel becomes active.
-  useEffect(() => {
-    if (panel.active === "models" && account) {
-      listModels().then(setSavedModels).catch(() => {});
-    }
-  }, [panel.active, account]);
-  const [saving, setSaving] = useState(false);
-  // The id of the saved model currently open (so Save updates it instead of
-  // creating a duplicate). Reset on Clear / opening a different model.
-  const [savedModelId, setSavedModelId] = useState<string | null>(null);
-  // List of the user's saved models — populated when the My Models panel opens.
-  const [savedModels, setSavedModels] = useState<SavedModel[]>([]);
-  // Bumped on each save so the History rail re-fetches the version list.
-  const [versionsBump, setVersionsBump] = useState(0);
-  // Versions for the current model — populated when the History panel opens.
-  const [versions, setVersions] = useState<ModelVersion[]>([]);
-  // A past version's graph staged for the DiffDialog; null = dialog closed.
-  const [historyDiff, setHistoryDiff] = useState<{ prev: ModelGraph; label: string } | null>(null);
-  // Load version list whenever the History panel is active or a new save is made.
-  useEffect(() => {
-    if (panel.active === "history" && account && savedModelId) {
-      listVersions(savedModelId).then(setVersions).catch(() => {});
-    }
-  }, [panel.active, account, savedModelId, versionsBump]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Snapshot of the graph (JSON) as it was at the last Save / open — the baseline
-  // for "are there unsaved edits?". Comparing against this at click time avoids
-  // the races a boolean dirty-flag effect would have (e.g. open's store.set
-  // re-marking the freshly-loaded model dirty). null = no saved baseline yet.
-  const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null);
-  // Editable model name (shown in the top bar, used as the Save default).
+  // Editable model name (shown in the top bar).
   // A shared link's name wins on first load (opening someone's named model);
   // otherwise restore the locally-persisted name.
   const [modelName, setModelName] = useState(sharedModelName ?? loadModelName());
   useEffect(() => { persistModelName(modelName); }, [modelName]);
 
-  // Load the project's storages once signed in; retry through OWOX's transient
-  // 500s. Anonymous users have no session, so we skip the call entirely and
-  // clear any stale list.
+  // Load the project's storages (the host always has an OWOX session); retry
+  // through OWOX's transient 500s.
   const loadStorages = useCallback(async (): Promise<StorageOption[]> => {
     for (let attempt = 0; attempt < 4; attempt++) {
       try {
@@ -303,10 +240,8 @@ function CanvasInner() {
     return [];
   }, []);
 
-  useEffect(() => {
-    if (!me) { setStorages([]); return; }
-    void loadStorages();
-  }, [me, loadStorages]);
+  // The host session is always present, so load the project's storages on mount.
+  useEffect(() => { void loadStorages(); }, [loadStorages]);
 
   const handleStorageChange = useCallback((id: string) => { store.set({ ...store.get(), storageId: id }); }, []);
 
@@ -347,7 +282,6 @@ function CanvasInner() {
   // session and may not all be in OWOX yet.
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
-      if (isAuthRedirecting()) return; // intentional OAuth redirect, not a real exit
       if (!store.get().nodes.some(n => n.status !== "created")) return;
       e.preventDefault();
       e.returnValue = ""; // required for Chrome to show the native prompt
@@ -466,10 +400,10 @@ function CanvasInner() {
 
   // ── Import / Export / Push handlers ───────────────────────────────────────
   const handleExport = useCallback(() => {
-    const title = me?.projectTitle ?? "model-okf";
+    const title = "model-okf";
     const files = graphToBundleFiles(store.get(), title);
     downloadBundle(files, title);
-  }, [me]);
+  }, []);
 
   // Clear the canvas: permanently wipe every node + edge (keep the selected
   // storage). No undo — the dialog warns and offers an OKF export first.
@@ -477,9 +411,7 @@ function CanvasInner() {
     store.set({ storageId: store.get().storageId, nodes: [], edges: [] });
     setSelection(null);
     setShowClear(false);
-    setSavedModelId(null); // a cleared canvas is a fresh model — next Save creates a new row
     setModelName(DEFAULT_MODEL_NAME);
-    setSavedSnapshot(null); // no saved baseline for a fresh canvas
   }, []);
 
   const handleExportAndClear = useCallback(() => {
@@ -489,7 +421,7 @@ function CanvasInner() {
 
   // Export the canvas as an SVG (whole model, OWOX watermark). Uses the live RF
   // node list (measured sizes) to frame the export.
-  const imageName = (me?.projectTitle ?? "model").trim() || "model";
+  const imageName = "model";
   const handleExportSvg = useCallback(() => {
     exportCanvasSvg(rfNodes, imageName).catch(() => setShareToast("Couldn't export the image — please try again."));
   }, [rfNodes, imageName]);
@@ -553,141 +485,12 @@ function CanvasInner() {
     else store.set({ ...withLayout(g), storageId: store.get().storageId });
   }, [withLayout, applyMergeWithLayout]);
 
-  // Save to the Supabase account. Anonymous-first: if not signed in, open the
-  // sign-in dialog instead (the user clicks Save again after returning). On an
-  // already-saved model, update it in place; otherwise create a new row.
-  const handleSave = useCallback(async () => {
-    if (!account) { panel.open("enable"); return; }
-    setSaving(true);
-    try {
-      const graph = store.get();
-      const name = modelName.trim() || DEFAULT_MODEL_NAME;
-      let id = savedModelId;
-      if (id) {
-        await updateModel(id, { name, graph });
-      } else {
-        id = await createModel(name, graph);
-        setSavedModelId(id);
-      }
-      await createVersion(id, graph); // snapshot history (#4953)
-      setVersionsBump(b => b + 1); // tell the History rail to refresh
-      setSavedSnapshot(JSON.stringify(graph)); // baseline = what we just saved
-      setShareToast("Model saved");
-    } catch (e) {
-      setShareToast(`Save failed: ${(e as Error).message}`);
-    } finally {
-      setSaving(false);
-    }
-  }, [account, savedModelId, modelName]);
-
-  // Open a saved model. It already carries layout positions, so load it straight
-  // in (no re-layout) and remember its id so the next Save updates it.
-  const handleOpenSaved = useCallback((g: ModelGraph, id: string, name: string) => {
-    store.set({ ...g });
-    setSavedModelId(id);
-    setModelName(name);
-    setSavedSnapshot(JSON.stringify(g)); // baseline = the opened model as-is
-  }, []);
-
-  // Open a saved model by id from the My Models panel (loads the graph, then hands
-  // off to handleOpenSaved which sets the Canvas state).
-  const handleOpenModelById = useCallback(async (id: string) => {
-    try {
-      const g = await loadModel(id);
-      const m = savedModels.find(m => m.id === id);
-      handleOpenSaved(g, id, m?.name ?? "");
-      panel.close();
-    } catch (e) {
-      setShareToast(`Open failed: ${(e as Error).message}`);
-    }
-  }, [savedModels, handleOpenSaved, panel]);
-
-  // Rename a saved model. Also updates `modelName` when renaming the current
-  // model, which keeps the top-bar name (and Enable-control subtext) in sync.
-  const handleRenameModel = useCallback(async (id: string, name: string) => {
-    try {
-      await updateModel(id, { name });
-      if (id === savedModelId) setModelName(name);
-      setSavedModels(await listModels());
-    } catch (e) {
-      setShareToast(`Rename failed: ${(e as Error).message}`);
-    }
-  }, [savedModelId]);
-
-  // Delete a saved model and refresh the list. If it was the open model, detach
-  // the canvas from the deleted record so the next Save creates a new one.
-  const handleDeleteModel = useCallback(async (id: string) => {
-    try {
-      await deleteModel(id);
-      if (id === savedModelId) setSavedModelId(null);
-      setSavedModels(await listModels());
-    } catch (e) {
-      setShareToast(`Delete failed: ${(e as Error).message}`);
-    }
-  }, [savedModelId]);
-
-  // Restore a past version onto the canvas. Keep it the same open model (don't
-  // touch savedModelId/name) — the next Save snapshots this restored state as a
-  // new version, so nothing is destroyed.
-  const handleRestoreVersion = useCallback((g: ModelGraph) => {
-    store.set({ ...g });
-    setShareToast("Version restored to the canvas — Save to keep it.");
-  }, []);
-
-  // Load a version by id and show the DiffDialog comparing it to the current canvas.
-  const handleCompare = useCallback(async (id: string) => {
-    try {
-      const prev = await loadVersion(id);
-      const v = versions.find(v => v.id === id);
-      const label = v ? new Date(v.created_at).toLocaleString() : "that version";
-      setHistoryDiff({ prev, label });
-    } catch (e) {
-      setShareToast(`Compare failed: ${(e as Error).message}`);
-    }
-  }, [versions]);
-
-  // Load a version by id and restore it to the canvas.
-  const handleRestoreById = useCallback(async (id: string) => {
-    try {
-      const g = await loadVersion(id);
-      handleRestoreVersion(g);
-    } catch (e) {
-      setShareToast(`Restore failed: ${(e as Error).message}`);
-    }
-  }, [handleRestoreVersion]);
-
-  // "New model" from the rail. Nothing to lose → just start fresh: an empty
-  // canvas, or a saved model with no edits since its last Save (it's safely in
-  // Models). Only confirm when there's genuinely unsaved work on the canvas.
-  const handleNewModel = useCallback(() => {
-    const g = store.get();
-    // Nothing unsaved to lose when the canvas is empty, or it's a saved model
-    // whose graph still matches its last-saved snapshot. Otherwise confirm.
-    const clean = !!savedModelId && savedSnapshot !== null && JSON.stringify(g) === savedSnapshot;
-    if (g.nodes.length === 0 || clean) clearCanvas();
-    else setShowNewModel(true);
-  }, [clearCanvas, savedModelId, savedSnapshot]);
-
-  // Open the Enable panel (signed-out auth) or Account panel (signed-in) — the
-  // single "Enable" top-bar control toggles between them based on sign-in state.
-  const handleEnable = useCallback(() => {
-    setVisualRailId(null); // Account/Enable aren't rail panels — clear any prior rail highlight.
-    panel.open(account ? "account" : "enable");
-  }, [account, panel]);
-
-  // Rail open with gating: models/history require a Supabase account; redirect to
-  // the Enable panel when signed out so the user can create one. visualRailId is
-  // ONLY needed for that gated case (active routes to "enable" but we still want
-  // the clicked icon lit). For normal opens the highlight follows panel.active.
+  // Rail open — every panel is available (the host brokers OWOX auth, so there's
+  // no signed-out gate anymore); visualRailId just follows the clicked icon.
   const handleRailOpen = useCallback((id: RightPanelId) => {
-    const target = gatedPanelId(id, !!account);
-    setVisualRailId(target === id ? null : id);
-    panel.open(target);
-  }, [account, panel]);
-
-  // Confirmed start-new: wipe to a fresh model (clearCanvas resets id + name).
-  const startNewModel = useCallback(() => { clearCanvas(); setShowNewModel(false); }, [clearCanvas]);
-  const exportAndStartNewModel = useCallback(() => { handleExport(); startNewModel(); }, [handleExport, startNewModel]);
+    setVisualRailId(null);
+    panel.open(id);
+  }, [panel]);
 
   const handleUseTemplate = useCallback((g: ModelGraph, name: string) => {
     // Remember the matching niche so the Business Goal dialog can pre-pick it.
@@ -697,7 +500,6 @@ function CanvasInner() {
     // silently wiped.
     if (store.get().nodes.length === 0) {
       setModelName(templateModelName(name)); // "My {template} OKF with OWOX"
-      setSavedModelId(null); // a fresh model from a template, not the open saved one
       applyTemplate(g, "replace");
       setShowLibrary(false);
     } else {
@@ -709,7 +511,7 @@ function CanvasInner() {
     if (pendingTemplate) {
       // Replacing = a fresh model from this template, so re-seed the name; merging
       // keeps the current model (and its name) and just folds the template in.
-      if (mode === "replace") { setModelName(templateModelName(pendingTemplate.name)); setSavedModelId(null); }
+      if (mode === "replace") setModelName(templateModelName(pendingTemplate.name));
       applyTemplate(pendingTemplate.graph, mode);
     }
     setPendingTemplate(null);
@@ -730,28 +532,8 @@ function CanvasInner() {
     }
   }, [storages]);
 
-  const handlePush = useCallback(() => {
-    // Anonymous → sign in first (no project/storage to confirm yet). Signed-in →
-    // confirm the target project + storage before sending (users kept pushing to
-    // the wrong storage).
-    if (pushIntent(me) === "sign-in") { setSignIn({ mode: "push" }); return; }
-    setShowPushConfirm(true);
-  }, [me]);
-
-  // Any sign-out detaches the model from OWOX (owoxId/created → unpushed drafts),
-  // so the same marts can be pushed into a different project after re-signing in.
-  const handleSignOut = useCallback(() => {
-    store.set(detachFromOwox(store.get()));
-    void signOut();
-  }, [signOut]);
-
-  // From the push dialog: detach + sign out, then immediately open sign-in so the
-  // user can connect a different project's key.
-  const handleChangeProject = useCallback(() => {
-    setShowPushConfirm(false);
-    handleSignOut();
-    setSignIn({ mode: "connect" });
-  }, [handleSignOut]);
+  // Host brokers OWOX auth — no sign-in. Confirm the target storage, then push.
+  const handlePush = useCallback(() => { setShowPushConfirm(true); }, []);
 
   // ── Pending count for TopBar ───────────────────────────────────────────────
   const pendingCount = graph.nodes.filter(n => n.status === "pending").length;
@@ -761,15 +543,6 @@ function CanvasInner() {
     tool === "add" ? "canvas-add" : tool === "connect" ? "canvas-connect" : "",
     layoutAnimating ? "canvas-animating" : "",
   ].filter(Boolean).join(" ");
-
-  // Save-state caption for the top bar: empty canvas → hide; matches last saved
-  // snapshot → "saved"; otherwise "unsaved".
-  const saveState: "saved" | "unsaved" | null =
-    graph.nodes.length === 0
-      ? null
-      : savedModelId && savedSnapshot !== null && JSON.stringify(graph) === savedSnapshot
-        ? "saved"
-        : "unsaved";
 
   return (
     <div
@@ -795,12 +568,11 @@ function CanvasInner() {
         onOpenGoal={() => setShowGoal(true)}
         goalSet={!!goal}
         questionsEnabled={questionsEnabled}
-        signedIn={!!me}
-        projectTitle={me?.projectTitle}
+        // The host always brokers an OWOX project session, so the top bar's
+        // signed-in chrome (storage picker, push menu) is always shown here;
+        // TopBar itself sheds the auth-era props in Task 8.
+        signedIn
         modelName={modelName}
-        supabaseEnabled={supabaseEnabled}
-        accountEmail={account?.email ?? null}
-        onEnable={handleEnable}
       />
       {shareToast && <ShareToast message={shareToast} onClose={() => setShareToast(null)} />}
       {pushing && (
@@ -824,13 +596,14 @@ function CanvasInner() {
           onClose={() => setShowOwoxImport(false)}
         />
       )}
-      {showPushConfirm && me && (
+      {showPushConfirm && (
         <PushConfirmDialog
-          projectTitle={me.projectTitle}
           storage={storages.find(s => s.id === graph.storageId) ?? null}
           counts={pushPreview(graph, graph.storageId)}
           onConfirm={() => { setShowPushConfirm(false); void runPush(); }}
-          onChangeProject={handleChangeProject}
+          // "Change project" (sign out + re-connect) has no meaning once the host
+          // brokers the OWOX session — PushConfirmDialog drops this control in Task 8.
+          onChangeProject={() => {}}
           onClose={() => setShowPushConfirm(false)}
         />
       )}
@@ -840,15 +613,6 @@ function CanvasInner() {
           onDelete={clearCanvas}
           onExportAndDelete={handleExportAndClear}
           onClose={() => setShowClear(false)}
-        />
-      )}
-      {showNewModel && (
-        <NewModelDialog
-          counts={{ marts: graph.nodes.length, relationships: graph.edges.length }}
-          savedModel={!!savedModelId}
-          onStart={startNewModel}
-          onExportAndStart={exportAndStartNewModel}
-          onClose={() => setShowNewModel(false)}
         />
       )}
       {showWelcome && (
@@ -879,33 +643,6 @@ function CanvasInner() {
           onConfirm={g => { setGoalState(g); persistGoal(g); }}
           onClear={() => { setGoalState(null); persistGoal(null); setShowGoal(false); }}
           onClose={() => setShowGoal(false)}
-        />
-      )}
-      {historyDiff && (
-        <DiffDialog
-          prev={historyDiff.prev}
-          next={graph}
-          label={historyDiff.label}
-          onClose={() => setHistoryDiff(null)}
-        />
-      )}
-      {signIn && (
-        <SignInModal
-          mode={signIn.mode}
-          connect={connect}
-          onConnected={async () => {
-            const mode = signIn.mode;
-            setSignIn(null);
-            const list = await loadStorages();
-            if (mode === "push") {
-              if (list.length === 0) {
-                setPushResult({ created: 0, updated: 0, failed: 0, relationshipsCreated: 0, relationshipsFailed: 0, errors: ["Couldn't load your OWOX storages — please try Push again."] });
-                return;
-              }
-              await runPush(list);
-            }
-          }}
-          onClose={() => setSignIn(null)}
         />
       )}
 
@@ -1014,38 +751,6 @@ function CanvasInner() {
               embedded
             />
           )}
-          {panel.active === "enable" && (
-            <EnablePanel
-              onGoogle={() => void signInWithGoogle()}
-              onGitHub={() => void signInWithGitHub()}
-              onEmail={(email) => signInWithEmail(email)}
-            />
-          )}
-          {panel.active === "account" && account && (
-            <AccountPanel
-              email={account.email ?? ""}
-              onMyModels={() => panel.open("models")}
-              onSignOut={() => { void accountSignOut(); setSavedModelId(null); panel.close(); }}
-            />
-          )}
-          {panel.active === "models" && account && (
-            <MyModelsPanel
-              models={savedModels}
-              currentModelId={savedModelId}
-              onOpen={id => void handleOpenModelById(id)}
-              onNew={() => { handleNewModel(); panel.close(); }}
-              onRename={(id, name) => void handleRenameModel(id, name)}
-              onDelete={id => void handleDeleteModel(id)}
-            />
-          )}
-          {panel.active === "history" && account && (
-            <HistoryPanel
-              versions={versions}
-              onCompare={id => void handleCompare(id)}
-              onRestore={id => void handleRestoreById(id)}
-              signedIn={!!account}
-            />
-          )}
           {panel.active === "share" && (
             <SharePanel
               shareUrl={buildShareUrl(store.get(), modelName)}
@@ -1054,7 +759,10 @@ function CanvasInner() {
             />
           )}
         </ModelSheet>
-        <RightRail active={panel.active} onOpen={handleRailOpen} signedIn={!!account} highlightId={visualRailId} onSave={supabaseEnabled ? handleSave : undefined} saving={saving} saveState={saveState} />
+        {/* signedIn is a vestigial required prop on RightRail (unused inside it,
+            reserved for later gating) — trimmed away in Task 8 along with the
+            rest of RightRail's auth-era surface. */}
+        <RightRail active={panel.active} onOpen={handleRailOpen} signedIn highlightId={visualRailId} />
       </div>
     </div>
   );
