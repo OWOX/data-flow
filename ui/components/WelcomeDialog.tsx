@@ -1,8 +1,7 @@
-import { X, Rocket, Plus, Download, ExternalLink } from "lucide-react";
+import { X, Rocket, Plus, Download } from "lucide-react";
 import type { ModelGraph } from "../okf";
 import { TEMPLATES } from "../templates";
 import { LibraryIcon } from "../lib/icons";
-import { IMPORT_GUIDE_URL } from "../lib/links";
 
 interface Props {
   /** Roll a template onto the canvas. */
@@ -72,15 +71,6 @@ export function WelcomeDialog({ onUseTemplate, onStartBlank, onImport }: Props) 
           >
             <Download size={15} /> Import OKF
           </button>
-          <div className="flex-1" />
-          <a
-            href={IMPORT_GUIDE_URL}
-            target="_blank"
-            rel="noopener"
-            className="flex items-center gap-[5px] text-[12.5px] font-[550] text-[#1e88e5] hover:underline"
-          >
-            Import guide <ExternalLink size={13} />
-          </a>
         </div>
       </div>
     </div>

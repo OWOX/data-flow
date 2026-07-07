@@ -30,11 +30,4 @@ describe("WelcomeDialog", () => {
     fireEvent.click(screen.getByText("Import OKF"));
     expect(p.onImport).toHaveBeenCalledTimes(1);
   });
-
-  it("links to an import guide", () => {
-    render(<WelcomeDialog {...props()} />);
-    const link = screen.getByText(/Import guide/).closest("a") as HTMLAnchorElement;
-    expect(link.getAttribute("href")).toBe("/ai-instructions.html");
-    expect(link.target).toBe("_blank");
-  });
 });

@@ -16,7 +16,3 @@ export function signupUrl(placement: string): string {
   });
   return `${SIGNUP_BASE}?${params.toString()}`;
 }
-
-// Guide for importing an existing model (OKF bundle / OWOX project) into the
-// canvas — the same AI-instructions page linked from the Import OKF dialog.
-export const IMPORT_GUIDE_URL = "/ai-instructions.html";
