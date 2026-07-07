@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { ModelGraph } from "@mc/okf";
-import { api } from "../lib/api";
+import { buildImportPayload } from "../sync/owoxImportFetch";
 import type { StorageOption } from "./TopBar";
 import { payloadToGraph, type ImportPayload, type ImportFilter } from "../sync/owoxImport";
 
@@ -22,7 +22,7 @@ export function OwoxImportDialog({ storages, onConfirm, onClose }: Props) {
   async function loadGraph() {
     setError(null); setLoading(true);
     try {
-      const p = await api<ImportPayload>(`/api/owox-import?storageId=${encodeURIComponent(storageId)}`);
+      const p = await buildImportPayload(storageId);
       setPayload(p);
       setStep("filter");
     } catch (e) {

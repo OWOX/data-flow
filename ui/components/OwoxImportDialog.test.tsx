@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { OwoxImportDialog } from "./OwoxImportDialog";
-import * as apiMod from "../lib/api";
+import * as owoxImportFetchMod from "../sync/owoxImportFetch";
 
 const storages = [{ id: "st_1", title: "Analytics BQ", type: "GOOGLE_BIGQUERY" }];
 const payload = {
@@ -13,7 +13,7 @@ const payload = {
   relationships: [{ sourceId: "a", targetId: "b", joinConditions: [] }],
 };
 
-beforeEach(() => vi.spyOn(apiMod, "api").mockResolvedValue(payload as any));
+beforeEach(() => vi.spyOn(owoxImportFetchMod, "buildImportPayload").mockResolvedValue(payload as any));
 
 describe("OwoxImportDialog", () => {
   it("step 1 lists storages by title and type", () => {

@@ -1,10 +1,14 @@
+import { owox } from '@owox/plugin-sdk';
+
+// The host is the capability broker: every OWOX call goes through owox.request,
+// which injects the project token + api-key-id. Keeps the old `api(path, opts)`
+// signature so all callers (sync/push, importers, storage reads) are untouched.
+// Broker errors carry `code` (e.g. GRANT_DENIED) and `status`, matching what
+// callers branch on.
 export async function api<T>(path: string, opts: RequestInit = {}): Promise<T> {
-  const res = await fetch(path, { credentials: "include", headers: { "Content-Type": "application/json", ...(opts.headers || {}) }, ...opts });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    const err = new Error(body.error || `HTTP ${res.status}`) as Error & { status?: number };
-    err.status = res.status; // callers can branch on this (e.g. 429 → AI limit)
-    throw err;
-  }
-  return res.status === 204 ? (undefined as T) : await res.json();
+  const method = (opts.method ?? 'GET').toUpperCase();
+  const body = opts.body ? JSON.parse(opts.body as string) : undefined;
+  // The old BFF exposed /api/storages; the real OWOX path is /api/data-storages.
+  const p = path === '/api/storages' ? '/api/data-storages' : path;
+  return owox.request(method, p, body) as Promise<T>;
 }
