@@ -545,11 +545,14 @@ function CanvasInner() {
 
   return (
     <div
-      className="flex flex-col h-screen overflow-hidden bg-[#f7f8fa]"
+      className="h-screen overflow-hidden bg-[#eaecf1] p-2.5"
       style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, system-ui, sans-serif" }}
       onKeyDown={handleKeyDown}
       tabIndex={0}
     >
+      {/* Standard OWOX content layout: the plugin sits in a rounded, bordered card
+          on a muted page background (radius matches the design system --radius: 10px). */}
+      <div className="flex h-full flex-col overflow-hidden rounded-[10px] border border-[#d8dee8] bg-[#f7f8fa] shadow-sm">
       <TopBar
         pendingCount={pendingCount}
         storages={storages}
@@ -670,6 +673,7 @@ function CanvasInner() {
             zoomOnScroll={true}
             zoomOnDoubleClick={false}
             deleteKeyCode={null}
+            proOptions={{ hideAttribution: true }}
           >
             <Background variant={BackgroundVariant.Dots} gap={22} size={1.3} color="#e2e6ec" />
             {/* Nudged up to leave room for the feedback link directly below. */}
@@ -751,6 +755,7 @@ function CanvasInner() {
           )}
         </ModelSheet>
         <RightRail active={panel.active} onOpen={handleRailOpen} highlightId={visualRailId} />
+      </div>
       </div>
     </div>
   );
