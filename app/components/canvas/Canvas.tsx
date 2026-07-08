@@ -545,17 +545,18 @@ function CanvasInner() {
 
   return (
     <div
-      className="h-screen overflow-hidden bg-background p-3"
+      className="dm-page flex flex-col h-screen overflow-hidden"
       style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, system-ui, sans-serif" }}
       onKeyDown={handleKeyDown}
       tabIndex={0}
     >
-      {/* Standard OWOX content layout (AGENTS.md / DESIGN.md): primary content sits
-          in a .dm-card container. The host doesn't load the custom .dm-card utility
-          into the iframe, so we replicate its EXACT classes here:
-          `bg-muted/50 rounded-md border-b border-gray-200 p-4 dark:border-white/4 dark:bg-white/4`
-          — one subtle BOTTOM border, not a full box. */}
-      <div className="flex h-full flex-col overflow-hidden rounded-md border-b border-gray-200 bg-muted/50 p-4 dark:border-white/4 dark:bg-white/4">
+      {/* Standard OWOX host page chrome (AGENTS.md → UI work): dm-page > dm-page-header
+          (title) > dm-page-content > .dm-card. The .dm-* classes ship as explicit-value
+          CSS in styles.css (copied verbatim from plugin-starter) so the card corner is
+          the host's 8px — NOT the 6px a default-Tailwind `rounded-md` would give. */}
+      <header className="dm-page-header"><h1 className="dm-page-header-title">Model Canvas</h1></header>
+      <div className="dm-page-content flex min-h-0 flex-1 flex-col pb-6">
+      <div className="dm-card flex h-full min-h-0 flex-col overflow-hidden">
       <TopBar
         pendingCount={pendingCount}
         storages={storages}
@@ -758,6 +759,7 @@ function CanvasInner() {
           )}
         </ModelSheet>
         <RightRail active={panel.active} onOpen={handleRailOpen} highlightId={visualRailId} />
+      </div>
       </div>
       </div>
     </div>

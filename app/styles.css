@@ -1,3 +1,50 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ── OWOX host page chrome ──────────────────────────────────────────────────
+   The white, rounded content card + page header used by the Storages / Destinations
+   / Plugins pages. Ship these on EVERY plugin page (see AGENTS.md → UI work).
+
+   These rules use EXPLICIT values on purpose. The host compiles plugin CSS with
+   the DEFAULT Tailwind theme (it ignores your tailwind.config — bundle-ui.ts), where
+   `rounded-md` = 6px, but the host app overrides --radius so its `rounded-md` = 8px,
+   and tokens like `muted`/`foreground` don't exist. So DON'T rebuild the card from
+   `rounded-md` / `bg-muted` utilities — they'd render a different corner + color
+   inside the iframe. Keep this block verbatim and use the `.dm-*` classes. */
+.dm-page {
+  min-height: 100%;
+}
+.dm-page-header {
+  padding: 1rem 2rem;
+}
+.dm-page-header-title {
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+  font-weight: 500;
+}
+.dm-page-content {
+  padding-inline: 1rem;
+}
+@media (min-width: 768px) {
+  .dm-page-header {
+    padding: 1.5rem 3rem;
+  }
+  .dm-page-header-title {
+    font-size: 1.5rem;
+    line-height: 2rem;
+  }
+  .dm-page-content {
+    padding-inline: 3rem;
+  }
+}
+.dm-card {
+  padding: 1rem;
+  border-radius: 8px; /* host --radius (0.625rem) − 2px; NOT default rounded-md (6px) */
+  border-bottom: 1px solid #e5e7eb; /* gray-200; a single bottom border, not a full box */
+  background-color: color-mix(in oklch, oklch(0.97 0 0) 50%, transparent); /* ≈ muted/50 */
+}
+.dark .dm-card {
+  border-bottom-color: rgba(255, 255, 255, 0.04);
+  background-color: rgba(255, 255, 255, 0.04);
+}
