@@ -1,39 +1,3 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* OWOX design-system tokens (subset), mirrored from upstream packages/ui
-   globals.css. The host serves our prebuilt ui/ as-is, so our own Tailwind/PostCSS
-   pipeline compiles these — that's why we can use real tokens here even though the
-   host's own esbuild build would ignore a tailwind.config. Keeps the plugin native
-   to the OWOX host. */
-:root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.3346 0.0123 279.25);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.3346 0.0123 279.25);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.5148 0.0128 274.72);
-  --border: oklch(0.922 0 0);
-  --radius: 0.625rem;
-}
-
-/* Standard content layout + card (DESIGN.md "Layout & Page Structure").
-   .dm-card mirrors the upstream rule: bg-muted/50 rounded-md border border p-4.
-   (Upstream uses border-b for stacked list rows; a standalone framing card takes a
-   full border via the same --border token so the rounded corners read as a card.) */
-.dm-page {
-  min-height: 100%;
-  background-color: var(--background);
-  color: var(--foreground);
-}
-.dm-page-content {
-  padding-left: 1rem;
-  padding-right: 1rem;
-}
-.dm-card {
-  background-color: color-mix(in oklch, var(--muted) 50%, transparent);
-  border: 1px solid var(--border);
-  border-radius: calc(var(--radius) - 2px); /* rounded-md */
-  padding: 1rem;
-}

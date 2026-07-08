@@ -545,15 +545,17 @@ function CanvasInner() {
 
   return (
     <div
-      className="dm-page h-screen overflow-hidden p-3"
+      className="h-screen overflow-hidden bg-background p-3"
       style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, system-ui, sans-serif" }}
       onKeyDown={handleKeyDown}
       tabIndex={0}
     >
-      {/* Standard OWOX content layout (DESIGN.md): the plugin sits in a .dm-card
-          on the .dm-page surface. p-0 overrides the card's default padding so the
-          canvas fills it edge-to-edge (same override okf-export uses). */}
-      <div className="dm-card flex h-full flex-col overflow-hidden p-0">
+      {/* Standard OWOX content layout (AGENTS.md / DESIGN.md): primary content sits
+          in a .dm-card container. The host doesn't load the custom .dm-card utility
+          into the iframe, so we replicate its exact classes here:
+          `bg-muted/50 rounded-md border-b border-gray-200` — one subtle BOTTOM
+          border, not a full box. Padding is dropped so the canvas fills edge-to-edge. */}
+      <div className="flex h-full flex-col overflow-hidden rounded-md border-b border-gray-200 bg-muted/50">
       <TopBar
         pendingCount={pendingCount}
         storages={storages}
