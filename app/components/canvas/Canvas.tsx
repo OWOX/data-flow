@@ -552,10 +552,10 @@ function CanvasInner() {
     >
       {/* Standard OWOX content layout (AGENTS.md / DESIGN.md): primary content sits
           in a .dm-card container. The host doesn't load the custom .dm-card utility
-          into the iframe, so we replicate its exact classes here:
-          `bg-muted/50 rounded-md border-b border-gray-200` — one subtle BOTTOM
-          border, not a full box. Padding is dropped so the canvas fills edge-to-edge. */}
-      <div className="flex h-full flex-col overflow-hidden rounded-md border-b border-gray-200 bg-muted/50">
+          into the iframe, so we replicate its EXACT classes here:
+          `bg-muted/50 rounded-md border-b border-gray-200 p-4 dark:border-white/4 dark:bg-white/4`
+          — one subtle BOTTOM border, not a full box. */}
+      <div className="flex h-full flex-col overflow-hidden rounded-md border-b border-gray-200 bg-muted/50 p-4 dark:border-white/4 dark:bg-white/4">
       <TopBar
         pendingCount={pendingCount}
         storages={storages}

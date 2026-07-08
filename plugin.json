@@ -1,7 +1,7 @@
 {
   "id": "model-canvas",
   "name": "Model Canvas",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "ui": {
     "entry": "ui/index.html"
   },
