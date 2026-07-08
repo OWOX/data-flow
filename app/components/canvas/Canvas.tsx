@@ -545,14 +545,15 @@ function CanvasInner() {
 
   return (
     <div
-      className="h-screen overflow-hidden bg-[#eaecf1] p-2.5"
+      className="dm-page h-screen overflow-hidden p-3"
       style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, system-ui, sans-serif" }}
       onKeyDown={handleKeyDown}
       tabIndex={0}
     >
-      {/* Standard OWOX content layout: the plugin sits in a rounded, bordered card
-          on a muted page background (radius matches the design system --radius: 10px). */}
-      <div className="flex h-full flex-col overflow-hidden rounded-[10px] border border-[#d8dee8] bg-[#f7f8fa] shadow-sm">
+      {/* Standard OWOX content layout (DESIGN.md): the plugin sits in a .dm-card
+          on the .dm-page surface. p-0 overrides the card's default padding so the
+          canvas fills it edge-to-edge (same override okf-export uses). */}
+      <div className="dm-card flex h-full flex-col overflow-hidden p-0">
       <TopBar
         pendingCount={pendingCount}
         storages={storages}
