@@ -1,7 +1,7 @@
 {
   "id": "model-canvas",
   "name": "Model Canvas",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "ui": {
     "entry": "ui/index.html"
   },
@@ -15,11 +15,11 @@
   "credentials": [
     {
       "type": "data-mart",
-      "scope": "all"
+      "actions": ["view"]
     },
     {
       "type": "storage",
-      "scope": "all"
+      "actions": ["view"]
     },
     {
       "type": "ai-provider",
