@@ -15,7 +15,7 @@
   "credentials": [
     {
       "type": "data-mart",
-      "actions": ["view"]
+      "actions": ["view", "create", "edit"]
     },
     {
       "type": "storage",
