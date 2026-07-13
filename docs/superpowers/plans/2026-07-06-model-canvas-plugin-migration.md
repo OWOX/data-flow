@@ -10,8 +10,8 @@
 
 ## Global Constraints
 
-- **Source of truth for the port:** `/Users/flakss/Documents/Projects/owox-model-canvas/packages/web/src` (the SPA) and `.../packages/okf/src` (the OKF lib). Referred to below as `SRC/` and `OKF/`.
-- **Contract:** `/Users/flakss/Documents/Projects/owox-data-marts-experimental/AGENTS.md` (v2). Blueprint: `.../packages/plugin-starter`.
+- **Source of truth for the port:** `/Users/flakss/Projects/owox-model-canvas/packages/web/src` (the SPA) and `.../packages/okf/src` (the OKF lib). Referred to below as `SRC/` and `OKF/`.
+- **Contract:** `/Users/flakss/Projects/owox-data-marts-experimental/AGENTS.md` (v2). Blueprint: `.../packages/plugin-starter`.
 - **Keep external (host import-map, never bundle):** `react`, `react-dom`, `react-dom/client`, `react/jsx-runtime`, `react/jsx-dev-runtime`, `react-router-dom`, `@owox/plugin-sdk`.
 - **`@owox/plugin-sdk` is NOT an npm dependency** (unpublished). Type it via `tsconfig` `paths` → `ui/sdk-mock.ts`; alias it in `vite.config.ts` (serve) and `vitest.config.ts`.
 - **Node 20+.** Package manager: **npm** (not pnpm — this is now a standalone plugin, not the old monorepo).
@@ -246,7 +246,7 @@ git add -A && git commit -m "feat: scaffold model-canvas plugin skeleton"
 Run:
 ```bash
 mkdir -p ui/okf
-cp /Users/flakss/Documents/Projects/owox-model-canvas/packages/okf/src/{index,parse,serialize,types,slug}.ts ui/okf/
+cp /Users/flakss/Projects/owox-model-canvas/packages/okf/src/{index,parse,serialize,types,slug}.ts ui/okf/
 ```
 
 - [ ] **Step 2: Confirm no build step is needed**
@@ -280,8 +280,8 @@ git add ui/okf && git commit -m "feat: vendor @mc/okf source into ui/okf"
 
 Run:
 ```bash
-cd /Users/flakss/Documents/Projects/model-canvas
-SRC=/Users/flakss/Documents/Projects/owox-model-canvas/packages/web/src
+cd /Users/flakss/Projects/model-canvas
+SRC=/Users/flakss/Projects/owox-model-canvas/packages/web/src
 cp "$SRC"/App.tsx "$SRC"/main.tsx "$SRC"/index.css ui/
 cp -R "$SRC"/state "$SRC"/sync "$SRC"/lib "$SRC"/components "$SRC"/templates "$SRC"/share "$SRC"/analytics "$SRC"/test ui/
 mkdir -p ui/okf && cp "$SRC"/okf/io.ts "$SRC"/okf/io.test.ts "$SRC"/okf/guideExample.test.ts ui/okf/
@@ -845,7 +845,7 @@ git commit -m "refactor: remove account/save/sign-in wiring from Canvas"
 
 Run:
 ```bash
-cd /Users/flakss/Documents/Projects/model-canvas
+cd /Users/flakss/Projects/model-canvas
 git rm ui/lib/auth.tsx ui/lib/account.tsx ui/lib/supabase.ts ui/lib/authRedirect.ts ui/lib/models.ts \
   ui/analytics/posthog.ts ui/components/SignInModal.tsx ui/components/SignInModal.test.tsx \
   ui/components/EnableControl.tsx ui/components/rail/AccountPanel.tsx ui/components/rail/MyModelsPanel.tsx \
