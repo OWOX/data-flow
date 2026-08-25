@@ -1,0 +1,8 @@
+{
+  "name": "Model Canvas",
+  "description": "Read-only map of the Data Marts, storages and destinations visible to you.",
+  "delivery": {
+    "type": "remote",
+    "url": "https://owox.github.io/model-canvas/"
+  }
+}
