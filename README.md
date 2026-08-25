@@ -17,14 +17,16 @@ release to **Only me** and installing it in OWOX Data Marts.
 
 ## Deploy
 
-The page is served from this Mac, not GitHub Pages (private repo on a free org plan):
+Served from this Mac, not GitHub Pages (private repo on a free org plan). KeenDNS terminates HTTPS
+for `https://model-canvas.dorland.keenetic.pro/` and proxies it to this host on **8787** — the same
+port `vite` pins for both commands:
 
-    npm run build
-    npm run serve          # http://10.0.0.11:8787 — sends `Access-Control-Allow-Origin: *`,
-                           # no X-Frame-Options, so the OWOX iframe can load it
+    npm run build && npm run preview   # the built page, what OWOX loads in production
+    npm run dev                        # live reload, same URL, while iterating inside OWOX
 
-Keenetic/KeenDNS terminates HTTPS for the public domain and proxies it to `10.0.0.11:8787`; that
-public HTTPS address is what goes in `plugin.json` → `delivery.url`. Then
-`gh release create vX.Y.Z --target main --generate-notes` so OWOX picks up the version.
+Both send `Access-Control-Allow-Origin: *` (`server.cors`) and no `X-Frame-Options`, which the
+opaque-origin iframe requires, and accept the tunnel's Host via `allowedHosts`.
 
-See [AGENTS.md](AGENTS.md) and the [authoring guide](https://docs.owox.com/docs/plugins/authoring-guide/).
+Release with `gh release create vX.Y.Z --target main --generate-notes`; OWOX reads `plugin.json`
+from the release commit, so the repo being private means publishing once and following the GitHub
+App install link OWOX returns.
