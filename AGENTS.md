@@ -12,8 +12,13 @@ about the OWOX plugin contract.
 
 ## This plugin
 
-- Read-only. It calls `list()` on `ctx.owox.dataMarts`, `storages` and `destinations` and nothing
-  that writes. Do not add create/update/delete calls without asking.
+- Read-only. It reads data marts, storages, destinations, `/api/connectors` and `/api/reports`,
+  and calls nothing that writes. The one POST — `/api/data-marts/data-quality/summaries` — is a
+  batch query: it takes ids and returns states. Do not add create/update/delete calls without asking.
+- Untyped endpoints are wrapped in `optional()` in `src/owox.ts`: a member who cannot read one loses
+  that detail (field counts, quality, report lines), never the page.
+- The canvas layout — SVG wires under the cards, hover isolates, click pins — is a port of
+  `owox.com/src/admin/model.astro`. Keep the two in step rather than inventing a second idiom.
 - No persistent storage: `plugin.json` declares no `collections`, and the sandbox has no
   localStorage/IndexedDB/cookies. State lives in memory for the session only.
 

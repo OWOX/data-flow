@@ -1,6 +1,7 @@
 # Model Canvas — OWOX Data Marts plugin
 
-Read-only view of the Data Marts, storages and destinations the installing member can see.
+The project's data model on one page: **Sources** → **Data Marts** → **Destinations**, as cards with
+the lines that connect them. Hover a card to isolate what it touches, click to pin it. Read-only.
 Runs in the OWOX plugin iframe; all API calls are brokered by the host through
 [`@owox/plugin-sdk`](https://docs.owox.com/packages/plugin-sdk/readme/) — the plugin never holds a
 credential and stores nothing (no collections declared).
