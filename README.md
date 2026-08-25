@@ -17,7 +17,14 @@ release to **Only me** and installing it in OWOX Data Marts.
 
 ## Deploy
 
-Push to `main` → GitHub Actions publishes `dist/` to <https://owox.github.io/model-canvas/> (the URL
-in `plugin.json`). Then `gh release create vX.Y.Z --target main --generate-notes`.
+The page is served from this Mac, not GitHub Pages (private repo on a free org plan):
+
+    npm run build
+    npm run serve          # http://10.0.0.11:8787 — sends `Access-Control-Allow-Origin: *`,
+                           # no X-Frame-Options, so the OWOX iframe can load it
+
+Keenetic/KeenDNS terminates HTTPS for the public domain and proxies it to `10.0.0.11:8787`; that
+public HTTPS address is what goes in `plugin.json` → `delivery.url`. Then
+`gh release create vX.Y.Z --target main --generate-notes` so OWOX picks up the version.
 
 See [AGENTS.md](AGENTS.md) and the [authoring guide](https://docs.owox.com/docs/plugins/authoring-guide/).
