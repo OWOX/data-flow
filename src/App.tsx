@@ -1,26 +1,44 @@
 import { connect, type PluginContext } from '@owox/plugin-sdk'
 import {
   BarChart3,
+  ChevronDown,
   CircleAlert,
   CircleCheck,
-  ChevronDown,
   CircleDashed,
   Clock,
   Code2,
+  Database,
   ExternalLink,
   Eye,
+  FileBarChart,
+  Info,
+  Layers,
   Mail,
   MessageSquare,
   MessagesSquare,
   Plug,
   Plus,
+  Send,
   Sheet,
   Table2,
   Users,
+  Waypoints,
 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
-import { destId, loadModel, martId, type Mart, type Model, type QualityState } from './owox'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  destId,
+  loadModel,
+  martId,
+  sourceId,
+  typeId,
+  type Mart,
+  type Model,
+  type QualityState,
+} from './owox'
 import { useWires } from './wires'
+
+/** How many cards are on screen before the rest wait behind the block's "load more". */
+const PAGE = 25
 
 const KIND = {
   CONNECTOR: { icon: Plug, label: 'connector' },
@@ -39,21 +57,6 @@ const DESTINATION = {
   GOOGLE_CHAT: { icon: MessagesSquare, label: 'Google Chat' },
 }
 
-/** How many cards of one type are on screen before the rest wait behind the block's "load more". */
-const PAGE = 25
-
-const GROUPS = [
-  { key: 'CONNECTOR', title: 'Connector-based Data Marts' },
-  { key: 'SQL', title: 'SQL Data Marts' },
-  { key: 'VIEW', title: 'View Data Marts' },
-  { key: 'TABLE', title: 'Table Data Marts' },
-  { key: 'OTHER', title: 'Other Data Marts' },
-]
-
-/** TABLE and TABLE_PATTERN are one kind of thing to a reader, and both badge as "table". */
-const groupOf = (mart: Mart) =>
-  mart.kind === 'TABLE_PATTERN' ? 'TABLE' : (mart.kind && mart.kind in KIND ? mart.kind : 'OTHER')
-
 /** PASSED / ISSUES / failed / not-run, in the four tones the card footer can show. */
 const QUALITY: Record<QualityState, { tone: 'ok' | 'warn' | 'bad' | 'idle'; label: string }> = {
   PASSED: { tone: 'ok', label: 'Data quality: passed' },
@@ -66,6 +69,23 @@ const QUALITY: Record<QualityState, { tone: 'ok' | 'warn' | 'bad' | 'idle'; labe
   RESTRICTED: { tone: 'idle', label: 'Data quality: not visible to you' },
   ALL_DISABLED: { tone: 'idle', label: 'Data quality: all checks disabled' },
 }
+
+/**
+ * The attribute filter, in facets.
+ *
+ * Options inside one facet are alternatives — "Draft" or "Published" — so they widen the result.
+ * Facets narrow it: choosing Draft and With reports asks for both.
+ */
+const FLAGS: Array<{ key: string; facet: string; label: string; test: (mart: Mart) => boolean }> = [
+  { key: 'rel', facet: 'relationships', label: 'With relationship', test: m => m.inbound + m.outbound > 0 },
+  { key: 'no-rel', facet: 'relationships', label: 'Without relationship', test: m => m.inbound + m.outbound === 0 },
+  { key: 'published', facet: 'status', label: 'Published', test: m => !m.draft },
+  { key: 'draft', facet: 'status', label: 'Draft', test: m => m.draft },
+  { key: 'reports', facet: 'reports', label: 'With reports', test: m => m.reports > 0 },
+  { key: 'no-reports', facet: 'reports', label: 'Without reports', test: m => m.reports === 0 },
+  { key: 'errors', facet: 'errors', label: 'With errors', test: m => m.errors },
+  { key: 'no-errors', facet: 'errors', label: 'Without errors', test: m => !m.errors },
+]
 
 export default function App() {
   const [ctx, setCtx] = useState<PluginContext | null>(null)
@@ -91,10 +111,6 @@ export default function App() {
     <div className="dm-page">
       <header className="dm-page-header">
         <h1 className="dm-page-header-title">Model Canvas</h1>
-        <p className="dm-muted dm-lede">
-          Every source, data mart and destination in this project, and the lines between them. Hover
-          a card to isolate what it touches; click to pin it.
-        </p>
       </header>
       <main className="dm-page-content">
         {error ? (
@@ -114,7 +130,32 @@ export default function App() {
 
 function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
   const canvas = useRef<HTMLDivElement>(null)
-  useWires(canvas, model.wires)
+  const [pinned, setPinned] = useState<string | null>(null)
+  const [limit, setLimit] = useState(PAGE)
+  const [storages, setStorages] = useState<string[]>([])
+  const [flags, setFlags] = useState<string[]>([])
+  const onPin = useCallback((id: string | null) => setPinned(id), [])
+
+  const marts = useMemo(() => {
+    const chosen = FLAGS.filter(flag => flags.includes(flag.key))
+    const facets = [...new Set(chosen.map(flag => flag.facet))]
+    return model.marts.filter(
+      mart =>
+        (storages.length === 0 || storages.includes(mart.storage)) &&
+        facets.every(facet => chosen.some(flag => flag.facet === facet && flag.test(mart))),
+    )
+  }, [model.marts, storages, flags])
+
+  const shown = marts.slice(0, limit)
+  const hidden = marts.length - shown.length
+
+  // Selecting a data mart turns the Reports block into that mart's reports.
+  const selected = pinned?.startsWith('dm-') ? pinned.slice(3) : null
+  const reports = selected ? model.reports.filter(report => report.martId === selected) : model.reports
+  const selectedTitle = model.marts.find(mart => mart.id === selected)?.title
+
+  const revision = `${limit}|${storages}|${flags}|${selected}`
+  useWires(canvas, model.wires, revision, pinned, onPin)
 
   const createMart = `/ui/${ctx.projectId}/data-marts/create`
 
@@ -136,9 +177,21 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
         </defs>
       </svg>
 
-      <Band title="Sources" hint="Input sources behind the connector data marts below.">
+      <Block
+        icon={Plug}
+        title="Sources"
+        count={model.sources.length}
+        hint="Input sources behind the connector data marts below. One card per source, badged with how many data marts it feeds."
+      >
         {model.sources.map(source => (
-          <article key={source.id} id={source.id} data-node tabIndex={0} aria-pressed="false" className="dm-node">
+          <article
+            key={source.id}
+            id={sourceId(source.key)}
+            data-node
+            tabIndex={0}
+            aria-pressed="false"
+            className="dm-node"
+          >
             <div className="dm-node-head">
               <Logo name={source.name} logo={source.logo} />
               <span className="dm-node-title" title={source.key}>
@@ -152,19 +205,69 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
             </div>
           </article>
         ))}
-        <AddCard ctx={ctx} path={createMart} label="New source" />
-      </Band>
+      </Block>
 
-      <MartBand ctx={ctx} marts={model.marts} createPath={createMart} />
+      <Block
+        icon={Database}
+        title="Data Marts"
+        count={marts.length}
+        hint={`Published before draft, connector-based before the rest, then ordered by how much depends on them: joins in, joins out, reports. ${PAGE} at a time. Quality and freshness sit along the bottom of each card.`}
+        toolbar={
+          <>
+            <MultiSelect
+              label="Storage"
+              options={model.storages.map(storage => ({ value: storage, label: storage }))}
+              selected={storages}
+              onChange={next => {
+                setStorages(next)
+                setLimit(PAGE)
+              }}
+            />
+            <MultiSelect
+              label="Filter"
+              options={FLAGS.map(flag => ({ value: flag.key, label: flag.label, group: flag.facet }))}
+              selected={flags}
+              onChange={next => {
+                setFlags(next)
+                setLimit(PAGE)
+              }}
+            />
+          </>
+        }
+        footer={
+          <div className="dm-band-grid dm-band-foot">
+            {hidden > 0 && (
+              <button type="button" className="dm-node dm-add" onClick={() => setLimit(limit + PAGE)}>
+                <ChevronDown size={18} />
+                <span>Load {Math.min(PAGE, hidden)} more</span>
+                <span className="dm-muted">
+                  {shown.length} of {marts.length}
+                </span>
+              </button>
+            )}
+            <AddCard ctx={ctx} path={createMart} label="New data mart" />
+          </div>
+        }
+      >
+        {shown.map(mart => (
+          <MartCard key={mart.id} ctx={ctx} mart={mart} />
+        ))}
+        {shown.length === 0 && <p className="dm-muted dm-empty">No data mart matches this filter.</p>}
+      </Block>
 
-      <Band title="Destinations" hint="Destination types this project publishes reports to.">
-        {model.destinations.map(destination => {
+      <Block
+        icon={Layers}
+        title="Destination Types"
+        count={model.destinationTypes.length}
+        hint="The kinds of destination this project publishes to. Only types with a destination behind them appear."
+      >
+        {model.destinationTypes.map(destination => {
           const kind = DESTINATION[destination.type as keyof typeof DESTINATION]
-          const Icon = kind?.icon ?? MessageSquare
+          const Icon = kind?.icon ?? Send
           return (
             <article
               key={destination.id}
-              id={destId(destination.type)}
+              id={typeId(destination.type)}
               data-node
               tabIndex={0}
               aria-pressed="false"
@@ -178,67 +281,84 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
               </div>
               <div className="dm-badges">
                 <span className="dm-badge">
-                  {destination.count} destination{destination.count === 1 ? '' : 's'}
+                  {destination.destinations} destination{destination.destinations === 1 ? '' : 's'}
                 </span>
               </div>
             </article>
           )
         })}
-        <AddCard ctx={ctx} path={`/ui/${ctx.projectId}/data-destinations`} label="New destination" />
-      </Band>
-    </div>
-  )
-}
+      </Block>
 
-/**
- * Data marts, grouped by definition type — connector-based first, as the sources above feed them.
- *
- * A project with hundreds of marts would otherwise open as a wall of cards nobody reads, so each
- * group shows a page at a time and says how many it is holding back.
- */
-function MartBand({ ctx, marts, createPath }: { ctx: PluginContext; marts: Mart[]; createPath: string }) {
-  const [limit, setLimit] = useState(PAGE)
-  const groups = GROUPS.map(group => ({
-    ...group,
-    items: marts.filter(mart => groupOf(mart) === group.key),
-  })).filter(group => group.items.length > 0)
-
-  const visible = groups.reduce((total, group) => total + Math.min(group.items.length, limit), 0)
-  const hidden = marts.length - visible
-
-  return (
-    <section className="dm-band">
-      <h2 className="dm-band-title">Data Marts</h2>
-      <p className="dm-muted dm-band-hint">
-        Connector-based first, at most {limit} per type. Quality and freshness sit along the bottom of
-        each card.
-      </p>
-      {groups.map(group => (
-        <div key={group.key} className="dm-group">
-          <h3 className="dm-group-title">
-            {group.title} <span className="dm-muted">{group.items.length}</span>
-          </h3>
-          <div className="dm-band-grid">
-            {group.items.slice(0, limit).map(mart => (
-              <MartCard key={mart.id} ctx={ctx} mart={mart} />
-            ))}
+      <Block
+        icon={Send}
+        title="Destinations"
+        count={model.destinations.length}
+        hint="The destinations themselves, each wired to its type and badged with the reports that write to it."
+        footer={
+          <div className="dm-band-grid dm-band-foot">
+            <AddCard ctx={ctx} path={`/ui/${ctx.projectId}/data-destinations`} label="New destination" />
           </div>
-        </div>
-      ))}
-      {/* One control for the whole block: it lifts the per-type cap everywhere at once. */}
-      <div className="dm-band-grid dm-band-foot">
-        {hidden > 0 && (
-          <button type="button" className="dm-node dm-add" onClick={() => setLimit(limit + PAGE)}>
-            <ChevronDown size={18} />
-            <span>Load {Math.min(PAGE, hidden)} more</span>
-            <span className="dm-muted">
-              {visible} of {marts.length}
-            </span>
-          </button>
+        }
+      >
+        {model.destinations.map(destination => {
+          const kind = DESTINATION[destination.type as keyof typeof DESTINATION]
+          const Icon = kind?.icon ?? Send
+          return (
+            <article
+              key={destination.id}
+              id={destId(destination.id)}
+              data-node
+              tabIndex={0}
+              aria-pressed="false"
+              className="dm-node"
+            >
+              <div className="dm-node-head">
+                <span className="dm-logo">
+                  <Icon size={16} />
+                </span>
+                <span className="dm-node-title" title={destination.title}>
+                  {destination.title}
+                </span>
+              </div>
+              <div className="dm-badges">
+                <span className="dm-badge">
+                  {destination.reports} report{destination.reports === 1 ? '' : 's'}
+                </span>
+              </div>
+            </article>
+          )
+        })}
+      </Block>
+
+      <Block
+        icon={FileBarChart}
+        title={selectedTitle ? `Reports · ${selectedTitle}` : 'Reports'}
+        count={reports.length}
+        hint={`The ${PAGE} most recently run reports. Select a data mart above and this block narrows to that mart's reports.`}
+      >
+        {reports.slice(0, PAGE).map(report => (
+          <article key={report.id} className="dm-node dm-static">
+            <div className="dm-node-head">
+              <span className="dm-node-title" title={report.title}>
+                {report.title}
+              </span>
+            </div>
+            <div className="dm-muted dm-node-sub">{report.martTitle ?? 'Unknown data mart'}</div>
+            <div className="dm-node-foot">
+              <span className={`dm-status dm-${runTone(report.lastRunStatus)}`}>
+                {report.lastRunStatus === 'ERROR' ? <CircleAlert size={14} /> : <CircleCheck size={14} />}
+              </span>
+              <span className="dm-muted dm-run">{report.lastRunAt ? ago(report.lastRunAt) : 'never run'}</span>
+            </div>
+          </article>
+        ))}
+        {reports.length === 0 && (
+          <p className="dm-muted dm-empty">
+            {selectedTitle ? 'This data mart has no reports.' : 'No reports in this project yet.'}
+          </p>
         )}
-        <AddCard ctx={ctx} path={createPath} label="New data mart" />
-      </div>
-    </section>
+      </Block>
+    </div>
   )
 }
 
@@ -266,6 +386,11 @@ function MartCard({ ctx, mart }: { ctx: PluginContext; mart: Mart }) {
           </span>
         )}
         {mart.fields !== undefined && <span className="dm-badge">{mart.fields} fields</span>}
+        {mart.outbound > 0 && (
+          <span className="dm-badge">
+            <Waypoints size={12} /> {mart.outbound} relationship{mart.outbound === 1 ? '' : 's'}
+          </span>
+        )}
         {mart.draft && <span className="dm-badge dm-badge-draft">draft</span>}
       </div>
       <div className="dm-node-foot">
@@ -280,17 +405,106 @@ function MartCard({ ctx, mart }: { ctx: PluginContext; mart: Mart }) {
   )
 }
 
-function Band({ title, hint, children }: { title: string; hint: string; children: React.ReactNode }) {
+/**
+ * One block of the canvas, chromed like the panels inside OWOX itself: a light card with an icon
+ * tile, its title, and an ⓘ carrying the description that used to sit under it.
+ */
+function Block({
+  icon: Icon,
+  title,
+  count,
+  hint,
+  toolbar,
+  footer,
+  children,
+}: {
+  icon: typeof Plug
+  title: string
+  count?: number
+  hint: string
+  toolbar?: React.ReactNode
+  footer?: React.ReactNode
+  children: React.ReactNode
+}) {
   return (
     <section className="dm-band">
-      <h2 className="dm-band-title">{title}</h2>
-      <p className="dm-muted dm-band-hint">{hint}</p>
+      <header className="dm-band-head">
+        <span className="dm-band-icon">
+          <Icon size={18} />
+        </span>
+        <h2 className="dm-band-title">{title}</h2>
+        {count !== undefined && <span className="dm-muted dm-band-count">{count}</span>}
+        <span className="dm-hint" tabIndex={0} role="note" aria-label={hint}>
+          <Info size={14} />
+          <span className="dm-hint-body">{hint}</span>
+        </span>
+        {toolbar && <div className="dm-band-tools">{toolbar}</div>}
+      </header>
       <div className="dm-band-grid">{children}</div>
+      {footer}
     </section>
   )
 }
 
-/** A card that adds the thing this band holds. Never a wire endpoint, so no `data-node`. */
+/** A checkbox menu on a native `<details>` — no library, and it closes on Escape by itself. */
+function MultiSelect({
+  label,
+  options,
+  selected,
+  onChange,
+}: {
+  label: string
+  options: Array<{ value: string; label: string; group?: string }>
+  selected: string[]
+  onChange: (next: string[]) => void
+}) {
+  if (options.length === 0) return null
+  // Each facet is labelled once, above its first option.
+  const headed = new Set<string>()
+  const rows = options.map(option => {
+    const heading = option.group && !headed.has(option.group) ? option.group : null
+    if (option.group) headed.add(option.group)
+    return { option, heading }
+  })
+
+  return (
+    <details className="dm-filter">
+      <summary>
+        {label}
+        {selected.length > 0 && <span className="dm-filter-count">{selected.length}</span>}
+        <ChevronDown size={14} />
+      </summary>
+      <div className="dm-filter-menu">
+        {rows.map(({ option, heading }) => (
+          <div key={option.value}>
+            {heading && <p className="dm-muted dm-filter-group">{heading}</p>}
+            <label>
+              <input
+                type="checkbox"
+                checked={selected.includes(option.value)}
+                onChange={e =>
+                  onChange(
+                    e.target.checked
+                      ? [...selected, option.value]
+                      : selected.filter(value => value !== option.value),
+                  )
+                }
+              />
+              {option.label}
+            </label>
+          </div>
+        ))}
+        {selected.length > 0 && (
+          <button type="button" className="dm-filter-clear" onClick={() => onChange([])}>
+            Clear
+          </button>
+        )}
+      </div>
+    </details>
+  )
+}
+
+/** A card that adds the thing this block holds. Never a wire endpoint, so no `data-node`. */
 function AddCard({ ctx, path, label }: { ctx: PluginContext; path: string; label: string }) {
   return (
     <AppLink ctx={ctx} path={path} className="dm-node dm-add" title={label}>
@@ -339,9 +553,7 @@ function AppLink({
 function Logo({ name, logo }: { name: string; logo?: string }) {
   const usable = logo && /^(https?:|data:)/.test(logo)
   return (
-    <span className="dm-logo">
-      {usable ? <img src={logo} alt="" width={16} height={16} /> : initials(name)}
-    </span>
+    <span className="dm-logo">{usable ? <img src={logo} alt="" width={16} height={16} /> : initials(name)}</span>
   )
 }
 
@@ -352,6 +564,8 @@ const initials = (name: string) =>
     .slice(0, 2)
     .map(word => word[0]?.toUpperCase())
     .join('')
+
+const runTone = (status?: string) => (status === 'ERROR' ? 'bad' : status === 'SUCCESS' ? 'ok' : 'idle')
 
 function freshnessTone(mart: Mart) {
   const coverage = mart.freshness?.coverage
@@ -380,7 +594,9 @@ function ago(iso: string) {
   ]
   let value = seconds
   for (const [unit, span] of units) {
-    if (Math.abs(value) < span) return new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' }).format(Math.round(value), unit)
+    if (Math.abs(value) < span) {
+      return new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' }).format(Math.round(value), unit)
+    }
     value /= span
   }
   return iso

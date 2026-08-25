@@ -1,16 +1,10 @@
-// The project's data model, read out of OWOX: which sources feed which data marts, and which
-// destinations those marts publish to. Read-only — `list`/`getJson`, plus one batch POST that is a
-// query (`data-quality/summaries` takes ids and returns states; it changes nothing).
+// The project's data model, read out of OWOX: which sources feed which data marts, how those marts
+// join to each other, and which destinations and reports they end up in.
+//
+// Read-only — `list`/`getJson`, plus one batch POST that is a query (`data-quality/summaries` takes
+// ids and returns states; it changes nothing).
 import type { PluginContext } from '@owox/plugin-sdk'
-import type { OWOXDataMart, OWOXDestination } from '@owox/api-client'
-
-export type DestinationType =
-  | 'GOOGLE_SHEETS'
-  | 'LOOKER_STUDIO'
-  | 'EMAIL'
-  | 'SLACK'
-  | 'MS_TEAMS'
-  | 'GOOGLE_CHAT'
+import type { OWOXDataMart } from '@owox/api-client'
 
 export type QualityState =
   | 'NEVER_RUN'
@@ -33,25 +27,45 @@ export type Mart = {
   kind: OWOXDataMart['definitionType']
   draft: boolean
   source?: string
+  storage: string
   fields?: number
   quality?: QualityState
   freshness?: Freshness
+  inbound: number
+  outbound: number
+  reports: number
+  errors: boolean
 }
 
-export type Destination = { id: string; type: DestinationType | string; count: number }
+export type DestinationType = { id: string; type: string; destinations: number }
+export type Destination = { id: string; title: string; type: string; reports: number }
 
-export type Wire = { from: string; to: string; kind: 'source' | 'report' }
+export type Report = {
+  id: string
+  title: string
+  martId?: string
+  martTitle?: string
+  destinationId?: string
+  lastRunAt?: string
+  lastRunStatus?: string
+}
+
+export type Wire = { from: string; to: string; kind: 'source' | 'relationship' | 'report' | 'type' }
 
 export type Model = {
   sources: Source[]
   marts: Mart[]
+  destinationTypes: DestinationType[]
   destinations: Destination[]
+  reports: Report[]
+  storages: string[]
   wires: Wire[]
 }
 
 export const sourceId = (key: string) => `src-${key.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`
 export const martId = (id: string) => `dm-${id}`
-export const destId = (type: string) => `dst-${type}`
+export const destId = (id: string) => `dd-${id}`
+export const typeId = (type: string) => `dt-${type}`
 
 /** An endpoint outside the typed client, or one this member may not read, must not cost the page. */
 async function optional<T>(load: () => Promise<T>, fallback: T): Promise<T> {
@@ -63,28 +77,39 @@ async function optional<T>(load: () => Promise<T>, fallback: T): Promise<T> {
 }
 
 type Connector = { name: string; title?: string | null; logo?: unknown }
-type Report = {
-  dataMart?: { id?: string } | null
-  dataDestinationAccess?: { id?: string; type?: string } | null
+type RawReport = {
+  id?: string
+  title?: string
+  lastRunAt?: string
+  lastRunStatus?: string
+  dataMart?: { id?: string; title?: string } | null
+  dataDestinationAccess?: { id?: string; title?: string; type?: string } | null
 }
 type QualityRow = { dataMartId: string; summary?: { state?: QualityState } | null }
 
-/** `fieldCount` lives on the model-canvas route, which is scoped to one storage at a time. */
-async function fieldCounts(ctx: PluginContext, storageIds: string[]) {
-  const counts = new Map<string, number>()
+/** Field counts and join edges are both scoped to one storage at a time by the model-canvas route. */
+async function perStorage(ctx: PluginContext, storageIds: string[]) {
+  const fields = new Map<string, number>()
+  const edges: Array<{ from: string; to: string }> = []
+
   for (const storageId of storageIds) {
     await optional(async () => {
       // ponytail: 50-page ceiling as a runaway guard; raise it if a storage ever holds more.
       let offset: number | undefined
       for (let page = 0; page < 50; page++) {
         const result = await ctx.owox.models.getDataMarts(storageId, offset)
-        for (const node of result.items) counts.set(node.id, node.fieldCount)
+        for (const node of result.items) fields.set(node.id, node.fieldCount)
         if (result.nextOffset === null) break
         offset = result.nextOffset
       }
     }, undefined)
+    await optional(async () => {
+      for (const edge of await ctx.owox.models.getEdges(storageId)) {
+        edges.push({ from: edge.sourceDataMartId, to: edge.targetDataMartId })
+      }
+    }, undefined)
   }
-  return counts
+  return { fields, edges }
 }
 
 export async function loadModel(ctx: PluginContext): Promise<Model> {
@@ -94,9 +119,9 @@ export async function loadModel(ctx: PluginContext): Promise<Model> {
     optional(() => ctx.owox.storages.list(), [] as Awaited<ReturnType<typeof ctx.owox.storages.list>>),
   ])
 
-  const [connectors, reports, quality, fields] = await Promise.all([
+  const [connectors, rawReports, quality, canvas] = await Promise.all([
     optional(() => ctx.owox.getJson<Connector[]>('/api/connectors'), []),
-    optional(() => ctx.owox.getJson<Report[]>('/api/reports'), []),
+    optional(() => ctx.owox.getJson<RawReport[]>('/api/reports'), []),
     optional(
       () =>
         ctx.owox.postJson<{ items?: QualityRow[] }>('/api/data-marts/data-quality/summaries', {
@@ -104,35 +129,61 @@ export async function loadModel(ctx: PluginContext): Promise<Model> {
         }),
       {},
     ),
-    fieldCounts(ctx, storages.map(s => s.id)),
+    perStorage(ctx, storages.map(s => s.id)),
   ])
 
   const connectorBy = new Map(connectors.map(c => [c.name, c]))
   const qualityBy = new Map((quality.items ?? []).map(row => [row.dataMartId, row.summary?.state]))
+  const known = new Set(dataMarts.map(m => m.id))
+  const destinationBy = new Map(destinations.map(d => [d.id, d]))
 
-  // Connector-based marts first, as they are the ones the sources above feed.
-  const marts: Mart[] = [...dataMarts]
-    .sort((a, b) => rank(a) - rank(b) || a.title.localeCompare(b.title))
-    .map(m => ({
-      id: m.id,
-      title: m.title,
-      kind: m.definitionType ?? null,
-      draft: m.status === 'DRAFT',
-      source: m.connectorSourceName,
-      fields: fields.get(m.id),
-      quality: qualityBy.get(m.id),
-      freshness: (m.dataLastUpdated as Freshness | undefined) ?? undefined,
-    }))
+  const edges = canvas.edges.filter(e => known.has(e.from) && known.has(e.to) && e.from !== e.to)
+  const inbound = tally(edges.map(e => e.to))
+  const outbound = tally(edges.map(e => e.from))
+
+  const reports: Report[] = rawReports.map((report, i) => ({
+    id: report.id ?? `report-${i}`,
+    title: report.title ?? 'Untitled report',
+    martId: report.dataMart?.id,
+    martTitle: report.dataMart?.title,
+    destinationId: report.dataDestinationAccess?.id,
+    lastRunAt: report.lastRunAt,
+    lastRunStatus: report.lastRunStatus,
+  }))
+  const reportsPerMart = tally(reports.map(r => r.martId))
+  const reportsPerDestination = tally(reports.map(r => r.destinationId))
+  const failingMarts = new Set(reports.filter(r => r.lastRunStatus === 'ERROR').map(r => r.martId))
+
+  const marts: Mart[] = dataMarts
+    .map(m => {
+      const state = qualityBy.get(m.id)
+      return {
+        id: m.id,
+        title: m.title,
+        kind: m.definitionType ?? null,
+        draft: m.status === 'DRAFT',
+        source: m.connectorSourceName,
+        storage: m.storage?.title ?? 'Unknown storage',
+        fields: canvas.fields.get(m.id),
+        quality: state,
+        freshness: (m.dataLastUpdated as Freshness | undefined) ?? undefined,
+        inbound: inbound.get(m.id) ?? 0,
+        outbound: outbound.get(m.id) ?? 0,
+        reports: reportsPerMart.get(m.id) ?? 0,
+        errors: state === 'ISSUES' || state === 'EXECUTION_FAILED' || failingMarts.has(m.id),
+      }
+    })
+    .sort(order)
 
   const sources = new Map<string, Source>()
   for (const mart of marts) {
     if (!mart.source) continue
-    const known = connectorBy.get(mart.source)
+    const connector = connectorBy.get(mart.source)
     const source = sources.get(mart.source) ?? {
       id: sourceId(mart.source),
       key: mart.source,
-      name: known?.title || mart.source,
-      logo: typeof known?.logo === 'string' ? known.logo : undefined,
+      name: connector?.title || mart.source,
+      logo: typeof connector?.logo === 'string' ? connector.logo : undefined,
       marts: 0,
     }
     source.marts += 1
@@ -140,36 +191,61 @@ export async function loadModel(ctx: PluginContext): Promise<Model> {
   }
 
   // One card per destination type that actually has a destination behind it.
-  const byType = new Map<string, number>()
-  for (const destination of destinations as OWOXDestination[]) {
-    byType.set(destination.type, (byType.get(destination.type) ?? 0) + 1)
-  }
+  const perType = tally(destinations.map(d => d.type))
 
-  const martIds = new Set(marts.map(m => m.id))
-  const wired = new Set<string>()
   const wires: Wire[] = []
   for (const mart of marts) {
     if (mart.source && sources.has(mart.source)) {
       wires.push({ from: sourceId(mart.source), to: martId(mart.id), kind: 'source' })
     }
   }
+  for (const edge of edges) {
+    wires.push({ from: martId(edge.from), to: martId(edge.to), kind: 'relationship' })
+  }
+  // Several reports commonly run one mart into one destination type: one line, not one per report.
+  const seen = new Set<string>()
   for (const report of reports) {
-    const from = report.dataMart?.id
-    const type = report.dataDestinationAccess?.type
-    // Several reports commonly run the same mart into the same destination type: one line.
-    if (!from || !type || !martIds.has(from) || !byType.has(type)) continue
-    const key = `${from}>${type}`
-    if (wired.has(key)) continue
-    wired.add(key)
-    wires.push({ from: martId(from), to: destId(type), kind: 'report' })
+    const type = report.destinationId ? destinationBy.get(report.destinationId)?.type : undefined
+    if (!report.martId || !type || !known.has(report.martId)) continue
+    const key = `${report.martId}>${type}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    wires.push({ from: martId(report.martId), to: typeId(type), kind: 'report' })
+  }
+  for (const destination of destinations) {
+    wires.push({ from: destId(destination.id), to: typeId(destination.type), kind: 'type' })
   }
 
   return {
     sources: [...sources.values()].sort((a, b) => b.marts - a.marts || a.name.localeCompare(b.name)),
     marts,
-    destinations: [...byType].map(([type, count]) => ({ id: destId(type), type, count })),
+    destinationTypes: [...perType].map(([type, count]) => ({ id: typeId(type), type, destinations: count })),
+    destinations: destinations
+      .map(d => ({ id: d.id, title: d.title, type: d.type, reports: reportsPerDestination.get(d.id) ?? 0 }))
+      .sort((a, b) => b.reports - a.reports || a.title.localeCompare(b.title)),
+    reports: reports.sort((a, b) => (b.lastRunAt ?? '').localeCompare(a.lastRunAt ?? '')),
+    storages: [...new Set(marts.map(m => m.storage))].sort((a, b) => a.localeCompare(b)),
     wires,
   }
 }
 
-const rank = (m: OWOXDataMart) => (m.definitionType === 'CONNECTOR' ? 0 : 1)
+/**
+ * Published before draft, connector-based before the rest, then the marts other things depend on:
+ * most joined-into first, then most joining-out, then most reported-on, then everything else.
+ */
+function order(a: Mart, b: Mart) {
+  return (
+    Number(a.draft) - Number(b.draft) ||
+    Number(a.kind !== 'CONNECTOR') - Number(b.kind !== 'CONNECTOR') ||
+    b.inbound - a.inbound ||
+    b.outbound - a.outbound ||
+    b.reports - a.reports ||
+    a.title.localeCompare(b.title)
+  )
+}
+
+function tally(keys: Array<string | undefined>) {
+  const counts = new Map<string, number>()
+  for (const key of keys) if (key) counts.set(key, (counts.get(key) ?? 0) + 1)
+  return counts
+}

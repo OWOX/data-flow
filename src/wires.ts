@@ -30,7 +30,19 @@ function curve(a: Box, b: Box) {
   return `M${x1} ${y1} C${right ? x1 + pull : x1 - pull} ${y1} ${right ? x2 - pull : x2 + pull} ${y2} ${x2} ${y2}`
 }
 
-export function useWires(canvasRef: RefObject<HTMLDivElement | null>, wires: Wire[]) {
+/**
+ * @param revision changes whenever the visible set of cards does — a filter, a "load more". The
+ *   paths are rebuilt and re-measured from scratch, which is what keeps a line from a card that has
+ *   just been filtered away from hanging in mid-air.
+ * @param pinned id of the pinned card, owned by React because the page reads it too.
+ */
+export function useWires(
+  canvasRef: RefObject<HTMLDivElement | null>,
+  wires: Wire[],
+  revision: unknown,
+  pinned: string | null,
+  onPin: (id: string | null) => void,
+) {
   useEffect(() => {
     const canvas = canvasRef.current
     const svg = canvas?.querySelector<SVGSVGElement>('#wires')
@@ -71,7 +83,9 @@ export function useWires(canvasRef: RefObject<HTMLDivElement | null>, wires: Wir
       for (const path of paths) {
         const a = at(path.dataset.from)
         const b = at(path.dataset.to)
+        // A card the filter has hidden ends its lines rather than leaving them drawn to a ghost.
         if (a && b) path.setAttribute('d', curve(a, b))
+        else path.removeAttribute('d')
       }
     }
 
@@ -79,62 +93,61 @@ export function useWires(canvasRef: RefObject<HTMLDivElement | null>, wires: Wir
     const observer = new ResizeObserver(layout)
     observer.observe(canvas)
 
-    // Queried on demand, not once: "load more" adds cards after this effect has run, and they must
-    // light and dim with the rest.
     const cards = () => canvas.querySelectorAll<HTMLElement>('[data-node]')
-    const focus = (card: HTMLElement | null) => {
-      canvas.classList.toggle('focused', Boolean(card))
-      const near = neighbours.get(card?.id ?? '') ?? new Set<string>()
-      for (const el of cards()) el.classList.toggle('lit', Boolean(card) && (el === card || near.has(el.id)))
+    const focus = (id: string | null) => {
+      canvas.classList.toggle('focused', Boolean(id))
+      const near = neighbours.get(id ?? '') ?? new Set<string>()
+      for (const el of cards()) {
+        el.classList.toggle('lit', Boolean(id) && (el.id === id || near.has(el.id)))
+        el.setAttribute('aria-pressed', String(el.id === pinned))
+      }
       for (const path of paths) {
-        const on = Boolean(card) && (path.dataset.from === card?.id || path.dataset.to === card?.id)
-        path.classList.toggle('lit', on)
+        path.classList.toggle('lit', Boolean(id) && (path.dataset.from === id || path.dataset.to === id))
       }
     }
+    focus(pinned)
 
-    // A pinned card outranks the pointer: hovering elsewhere leaves it alone. Clicking it again,
-    // or clicking another card, is the only thing that moves the pin.
-    let pinned: HTMLElement | null = null
-    const pin = (card: HTMLElement) => {
-      pinned = pinned === card ? null : card
-      for (const el of cards()) el.setAttribute('aria-pressed', String(el === pinned))
-      focus(pinned ?? card)
-    }
-
+    // A pinned card outranks the pointer: hovering elsewhere leaves it alone.
     const enter = (e: Event) => {
       if (pinned) return
-      focus((e.target as HTMLElement).closest<HTMLElement>('[data-node]'))
+      focus((e.target as HTMLElement).closest<HTMLElement>('[data-node]')?.id ?? null)
     }
-    const leave = () => pinned || focus(null)
+    const leave = () => {
+      if (!pinned) focus(null)
+    }
     const click = (e: MouseEvent) => {
-      // The card's own link is there to be followed, not to pin the card.
-      if ((e.target as HTMLElement).closest('a')) return
-      const card = (e.target as HTMLElement).closest<HTMLElement>('[data-node]')
-      if (card) pin(card)
+      const target = e.target as HTMLElement
+      // Links and controls are there to be used, not to move the pin.
+      if (target.closest('a, button, summary, input, label')) return
+      const card = target.closest<HTMLElement>('[data-node]')
+      if (card) onPin(card.id === pinned ? null : card.id)
+      // Clicking the page outside any block clears the selection.
+      else if (pinned && !target.closest('.dm-band')) onPin(null)
     }
     const keydown = (e: KeyboardEvent) => {
-      if (e.key !== 'Enter' && e.key !== ' ') return
       const card = (e.target as HTMLElement).closest<HTMLElement>('[data-node]')
+      if (e.key === 'Escape' && pinned) return onPin(null)
+      if (e.key !== 'Enter' && e.key !== ' ') return
       if (!card || e.target !== card) return
       e.preventDefault() // Space would scroll the canvas out from under the pin.
-      pin(card)
+      onPin(card.id === pinned ? null : card.id)
     }
 
     canvas.addEventListener('pointerover', enter)
     canvas.addEventListener('focusin', enter)
     canvas.addEventListener('pointerleave', leave)
-    canvas.addEventListener('click', click)
-    canvas.addEventListener('keydown', keydown)
+    document.addEventListener('click', click)
+    document.addEventListener('keydown', keydown)
 
     return () => {
       observer.disconnect()
       canvas.removeEventListener('pointerover', enter)
       canvas.removeEventListener('focusin', enter)
       canvas.removeEventListener('pointerleave', leave)
-      canvas.removeEventListener('click', click)
-      canvas.removeEventListener('keydown', keydown)
+      document.removeEventListener('click', click)
+      document.removeEventListener('keydown', keydown)
       canvas.classList.remove('focused')
       for (const path of paths) path.remove()
     }
-  }, [canvasRef, wires])
+  }, [canvasRef, wires, revision, pinned, onPin])
 }
