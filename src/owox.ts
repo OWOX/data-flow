@@ -28,6 +28,7 @@ export type Mart = {
   draft: boolean
   source?: string
   storage: string
+  storageType: string
   fields?: number
   quality?: QualityState
   freshness?: Freshness
@@ -50,7 +51,9 @@ export type Report = {
   lastRunStatus?: string
 }
 
-export type Wire = { from: string; to: string; kind: 'source' | 'relationship' | 'report' | 'type' }
+export type Wire = { from: string; to: string; kind: 'source' | 'relationship' | 'report' | 'type' | 'run' }
+
+export type Storage = { title: string; type: string; marts: number }
 
 export type Model = {
   sources: Source[]
@@ -58,7 +61,7 @@ export type Model = {
   destinationTypes: DestinationType[]
   destinations: Destination[]
   reports: Report[]
-  storages: string[]
+  storages: Storage[]
   wires: Wire[]
 }
 
@@ -66,6 +69,7 @@ export const sourceId = (key: string) => `src-${key.replace(/[^a-z0-9]+/gi, '-')
 export const martId = (id: string) => `dm-${id}`
 export const destId = (id: string) => `dd-${id}`
 export const typeId = (type: string) => `dt-${type}`
+export const reportId = (id: string) => `rp-${id}`
 
 /** An endpoint outside the typed client, or one this member may not read, must not cost the page. */
 async function optional<T>(load: () => Promise<T>, fallback: T): Promise<T> {
@@ -164,6 +168,7 @@ export async function loadModel(ctx: PluginContext): Promise<Model> {
         draft: m.status === 'DRAFT',
         source: m.connectorSourceName,
         storage: m.storage?.title ?? 'Unknown storage',
+        storageType: m.storage?.type ?? 'UNKNOWN',
         fields: canvas.fields.get(m.id),
         quality: state,
         freshness: (m.dataLastUpdated as Freshness | undefined) ?? undefined,
@@ -215,6 +220,11 @@ export async function loadModel(ctx: PluginContext): Promise<Model> {
   for (const destination of destinations) {
     wires.push({ from: destId(destination.id), to: typeId(destination.type), kind: 'type' })
   }
+  for (const report of reports) {
+    if (report.destinationId && destinationBy.has(report.destinationId)) {
+      wires.push({ from: destId(report.destinationId), to: reportId(report.id), kind: 'run' })
+    }
+  }
 
   return {
     sources: [...sources.values()].sort((a, b) => b.marts - a.marts || a.name.localeCompare(b.name)),
@@ -224,7 +234,7 @@ export async function loadModel(ctx: PluginContext): Promise<Model> {
       .map(d => ({ id: d.id, title: d.title, type: d.type, reports: reportsPerDestination.get(d.id) ?? 0 }))
       .sort((a, b) => b.reports - a.reports || a.title.localeCompare(b.title)),
     reports: reports.sort((a, b) => (b.lastRunAt ?? '').localeCompare(a.lastRunAt ?? '')),
-    storages: [...new Set(marts.map(m => m.storage))].sort((a, b) => a.localeCompare(b)),
+    storages: storageList(marts),
     wires,
   }
 }
@@ -242,6 +252,17 @@ function order(a: Mart, b: Mart) {
     b.reports - a.reports ||
     a.title.localeCompare(b.title)
   )
+}
+
+/** One row per storage the visible marts live in, with the type its icon comes from. */
+function storageList(marts: Mart[]): Storage[] {
+  const storages = new Map<string, Storage>()
+  for (const mart of marts) {
+    const storage = storages.get(mart.storage) ?? { title: mart.storage, type: mart.storageType, marts: 0 }
+    storage.marts += 1
+    storages.set(mart.storage, storage)
+  }
+  return [...storages.values()].sort((a, b) => b.marts - a.marts || a.title.localeCompare(b.title))
 }
 
 function tally(keys: Array<string | undefined>) {

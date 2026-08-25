@@ -18,10 +18,15 @@ import {
   MessagesSquare,
   Plug,
   Plus,
+  Search,
   Send,
+  Server,
   Sheet,
+  Snowflake,
   Table2,
   Users,
+  Boxes,
+  Cloud,
   Waypoints,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -29,6 +34,7 @@ import {
   destId,
   loadModel,
   martId,
+  reportId,
   sourceId,
   typeId,
   type Mart,
@@ -55,6 +61,16 @@ const DESTINATION = {
   SLACK: { icon: MessageSquare, label: 'Slack' },
   MS_TEAMS: { icon: Users, label: 'Microsoft Teams' },
   GOOGLE_CHAT: { icon: MessagesSquare, label: 'Google Chat' },
+}
+
+/** No brand marks in lucide, so each warehouse gets the glyph that reads closest to it. */
+const STORAGE = {
+  GOOGLE_BIGQUERY: Cloud,
+  LEGACY_GOOGLE_BIGQUERY: Cloud,
+  SNOWFLAKE: Snowflake,
+  AWS_ATHENA: Search,
+  AWS_REDSHIFT: Server,
+  DATABRICKS: Boxes,
 }
 
 /** PASSED / ISSUES / failed / not-run, in the four tones the card footer can show. */
@@ -216,7 +232,12 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
           <>
             <MultiSelect
               label="Storage"
-              options={model.storages.map(storage => ({ value: storage, label: storage }))}
+              options={model.storages.map(storage => ({
+                value: storage.title,
+                label: storage.title,
+                count: storage.marts,
+                icon: STORAGE[storage.type as keyof typeof STORAGE] ?? Database,
+              }))}
               selected={storages}
               onChange={next => {
                 setStorages(next)
@@ -337,7 +358,14 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
         hint={`The ${PAGE} most recently run reports. Select a data mart above and this block narrows to that mart's reports.`}
       >
         {reports.slice(0, PAGE).map(report => (
-          <article key={report.id} className="dm-node dm-static">
+          <article
+            key={report.id}
+            id={reportId(report.id)}
+            data-node
+            tabIndex={0}
+            aria-pressed="false"
+            className="dm-node"
+          >
             <div className="dm-node-head">
               <span className="dm-node-title" title={report.title}>
                 {report.title}
@@ -446,7 +474,13 @@ function Block({
   )
 }
 
-/** A checkbox menu on a native `<details>` — no library, and it closes on Escape by itself. */
+/**
+ * A checkbox menu on a native `<details>` — no library, and `name` makes the browser close the
+ * other one when this opens, so only ever one is down at a time.
+ *
+ * Nothing selected filters nothing, which is the same result as everything selected: both say
+ * "All" rather than leaving the reader to work out that an empty menu means no filter.
+ */
 function MultiSelect({
   label,
   options,
@@ -454,11 +488,13 @@ function MultiSelect({
   onChange,
 }: {
   label: string
-  options: Array<{ value: string; label: string; group?: string }>
+  options: Array<{ value: string; label: string; group?: string; count?: number; icon?: typeof Plug }>
   selected: string[]
   onChange: (next: string[]) => void
 }) {
   if (options.length === 0) return null
+  const all = selected.length === 0 || selected.length === options.length
+
   // Each facet is labelled once, above its first option.
   const headed = new Set<string>()
   const rows = options.map(option => {
@@ -468,17 +504,28 @@ function MultiSelect({
   })
 
   return (
-    <details className="dm-filter">
+    <details className="dm-filter" name="dm-filter">
       <summary>
         {label}
-        {selected.length > 0 && <span className="dm-filter-count">{selected.length}</span>}
+        <span className={all ? 'dm-filter-all' : 'dm-filter-count'}>{all ? 'All' : selected.length}</span>
         <ChevronDown size={14} />
       </summary>
       <div className="dm-filter-menu">
+        <label className="dm-filter-every">
+          <input
+            type="checkbox"
+            checked={all}
+            ref={box => {
+              if (box) box.indeterminate = !all
+            }}
+            onChange={e => onChange(e.target.checked ? options.map(option => option.value) : [])}
+          />
+          Select all
+        </label>
         {rows.map(({ option, heading }) => (
           <div key={option.value}>
             {heading && <p className="dm-muted dm-filter-group">{heading}</p>}
-            <label>
+            <label className={selected.includes(option.value) ? 'dm-on' : undefined}>
               <input
                 type="checkbox"
                 checked={selected.includes(option.value)}
@@ -490,7 +537,9 @@ function MultiSelect({
                   )
                 }
               />
-              {option.label}
+              {option.icon && <option.icon size={14} />}
+              <span className="dm-filter-label">{option.label}</span>
+              {option.count !== undefined && <span className="dm-badge">{option.count}</span>}
             </label>
           </div>
         ))}

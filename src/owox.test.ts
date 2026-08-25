@@ -56,7 +56,13 @@ test('the whole graph: cards, order, badges and lines', async () => {
   assert.equal(model.marts[0].errors, true)
   assert.equal(model.marts[1].outbound, 1)
   assert.equal(model.marts[2].draft, true)
-  assert.deepEqual(model.storages, ['Athena', 'BigQuery'])
+  assert.deepEqual(
+    model.storages.map(s => [s.title, s.type, s.marts]),
+    [
+      ['BigQuery', 'GOOGLE_BIGQUERY', 2],
+      ['Athena', 'AWS_ATHENA', 1],
+    ],
+  )
 
   assert.deepEqual(model.destinationTypes.map(d => [d.type, d.destinations]), [['GOOGLE_SHEETS', 2], ['LOOKER_STUDIO', 1]])
   // Looker counts two: a report whose data mart this member cannot see still writes to it.
@@ -73,6 +79,10 @@ test('the whole graph: cards, order, badges and lines', async () => {
     { from: 'dd-d1', to: 'dt-GOOGLE_SHEETS', kind: 'type' },
     { from: 'dd-d2', to: 'dt-GOOGLE_SHEETS', kind: 'type' },
     { from: 'dd-d3', to: 'dt-LOOKER_STUDIO', kind: 'type' },
+    { from: 'dd-d1', to: 'rp-r1', kind: 'run' },
+    { from: 'dd-d2', to: 'rp-r2', kind: 'run' },
+    { from: 'dd-d3', to: 'rp-r3', kind: 'run' },
+    { from: 'dd-d3', to: 'rp-r4', kind: 'run' },
   ])
 })
 
