@@ -3,6 +3,7 @@ import {
   BarChart3,
   CircleAlert,
   CircleCheck,
+  ChevronDown,
   CircleDashed,
   Clock,
   Code2,
@@ -37,6 +38,21 @@ const DESTINATION = {
   MS_TEAMS: { icon: Users, label: 'Microsoft Teams' },
   GOOGLE_CHAT: { icon: MessagesSquare, label: 'Google Chat' },
 }
+
+/** How many cards of one type are on screen before the rest wait behind the block's "load more". */
+const PAGE = 25
+
+const GROUPS = [
+  { key: 'CONNECTOR', title: 'Connector-based Data Marts' },
+  { key: 'SQL', title: 'SQL Data Marts' },
+  { key: 'VIEW', title: 'View Data Marts' },
+  { key: 'TABLE', title: 'Table Data Marts' },
+  { key: 'OTHER', title: 'Other Data Marts' },
+]
+
+/** TABLE and TABLE_PATTERN are one kind of thing to a reader, and both badge as "table". */
+const groupOf = (mart: Mart) =>
+  mart.kind === 'TABLE_PATTERN' ? 'TABLE' : (mart.kind && mart.kind in KIND ? mart.kind : 'OTHER')
 
 /** PASSED / ISSUES / failed / not-run, in the four tones the card footer can show. */
 const QUALITY: Record<QualityState, { tone: 'ok' | 'warn' | 'bad' | 'idle'; label: string }> = {
@@ -101,8 +117,6 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
   useWires(canvas, model.wires)
 
   const createMart = `/ui/${ctx.projectId}/data-marts/create`
-  const connectorMarts = model.marts.filter(m => m.kind === 'CONNECTOR')
-  const otherMarts = model.marts.filter(m => m.kind !== 'CONNECTOR')
 
   return (
     <div id="canvas" ref={canvas} className="dm-canvas">
@@ -141,15 +155,7 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
         <AddCard ctx={ctx} path={createMart} label="New source" />
       </Band>
 
-      <Band
-        title="Data Marts"
-        hint="Connector-based first. Quality and freshness sit along the bottom of each card."
-      >
-        {[...connectorMarts, ...otherMarts].map(mart => (
-          <MartCard key={mart.id} ctx={ctx} mart={mart} />
-        ))}
-        <AddCard ctx={ctx} path={createMart} label="New data mart" />
-      </Band>
+      <MartBand ctx={ctx} marts={model.marts} createPath={createMart} />
 
       <Band title="Destinations" hint="Destination types this project publishes reports to.">
         {model.destinations.map(destination => {
@@ -181,6 +187,58 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
         <AddCard ctx={ctx} path={`/ui/${ctx.projectId}/data-destinations`} label="New destination" />
       </Band>
     </div>
+  )
+}
+
+/**
+ * Data marts, grouped by definition type — connector-based first, as the sources above feed them.
+ *
+ * A project with hundreds of marts would otherwise open as a wall of cards nobody reads, so each
+ * group shows a page at a time and says how many it is holding back.
+ */
+function MartBand({ ctx, marts, createPath }: { ctx: PluginContext; marts: Mart[]; createPath: string }) {
+  const [limit, setLimit] = useState(PAGE)
+  const groups = GROUPS.map(group => ({
+    ...group,
+    items: marts.filter(mart => groupOf(mart) === group.key),
+  })).filter(group => group.items.length > 0)
+
+  const visible = groups.reduce((total, group) => total + Math.min(group.items.length, limit), 0)
+  const hidden = marts.length - visible
+
+  return (
+    <section className="dm-band">
+      <h2 className="dm-band-title">Data Marts</h2>
+      <p className="dm-muted dm-band-hint">
+        Connector-based first, at most {limit} per type. Quality and freshness sit along the bottom of
+        each card.
+      </p>
+      {groups.map(group => (
+        <div key={group.key} className="dm-group">
+          <h3 className="dm-group-title">
+            {group.title} <span className="dm-muted">{group.items.length}</span>
+          </h3>
+          <div className="dm-band-grid">
+            {group.items.slice(0, limit).map(mart => (
+              <MartCard key={mart.id} ctx={ctx} mart={mart} />
+            ))}
+          </div>
+        </div>
+      ))}
+      {/* One control for the whole block: it lifts the per-type cap everywhere at once. */}
+      <div className="dm-band-grid dm-band-foot">
+        {hidden > 0 && (
+          <button type="button" className="dm-node dm-add" onClick={() => setLimit(limit + PAGE)}>
+            <ChevronDown size={18} />
+            <span>Load {Math.min(PAGE, hidden)} more</span>
+            <span className="dm-muted">
+              {visible} of {marts.length}
+            </span>
+          </button>
+        )}
+        <AddCard ctx={ctx} path={createPath} label="New data mart" />
+      </div>
+    </section>
   )
 }
 

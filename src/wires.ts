@@ -79,11 +79,13 @@ export function useWires(canvasRef: RefObject<HTMLDivElement | null>, wires: Wir
     const observer = new ResizeObserver(layout)
     observer.observe(canvas)
 
-    const cards = canvas.querySelectorAll<HTMLElement>('[data-node]')
+    // Queried on demand, not once: "load more" adds cards after this effect has run, and they must
+    // light and dim with the rest.
+    const cards = () => canvas.querySelectorAll<HTMLElement>('[data-node]')
     const focus = (card: HTMLElement | null) => {
       canvas.classList.toggle('focused', Boolean(card))
       const near = neighbours.get(card?.id ?? '') ?? new Set<string>()
-      for (const el of cards) el.classList.toggle('lit', Boolean(card) && (el === card || near.has(el.id)))
+      for (const el of cards()) el.classList.toggle('lit', Boolean(card) && (el === card || near.has(el.id)))
       for (const path of paths) {
         const on = Boolean(card) && (path.dataset.from === card?.id || path.dataset.to === card?.id)
         path.classList.toggle('lit', on)
@@ -95,7 +97,7 @@ export function useWires(canvasRef: RefObject<HTMLDivElement | null>, wires: Wir
     let pinned: HTMLElement | null = null
     const pin = (card: HTMLElement) => {
       pinned = pinned === card ? null : card
-      for (const el of cards) el.setAttribute('aria-pressed', String(el === pinned))
+      for (const el of cards()) el.setAttribute('aria-pressed', String(el === pinned))
       focus(pinned ?? card)
     }
 
