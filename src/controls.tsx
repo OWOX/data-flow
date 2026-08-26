@@ -24,7 +24,7 @@ export function Block({
           <Icon size={18} />
         </span>
         <h2 className="dm-band-title">{title}</h2>
-        {total !== undefined && <span className="dm-muted dm-band-count">{total}</span>}
+        {total !== undefined && <span className="dm-badge dm-band-count">{total}</span>}
         <span className="dm-hint" tabIndex={0} role="note" aria-label={hint}>
           <Info size={14} />
           <span className="dm-hint-body">{hint}</span>
