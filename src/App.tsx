@@ -16,13 +16,15 @@ import {
   Filter,
   Info,
   KeyRound,
-  ListFilter,
+  Loader2,
   Plug,
   Plus,
+  Layers,
   Search,
   Sigma,
   Sparkles,
   Waypoints,
+  XCircle,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { destId, loadModel, martId, reportId, sourceId, type Mart, type Model, type QualityState } from './owox'
@@ -385,12 +387,12 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
                 </span>
               )}
               {report.preJoin > 0 && (
-                <span className="dm-badge" title={`${count(report.preJoin, 'slice filter')}, applied before the join`}>
-                  <ListFilter size={12} />
+                <span className="dm-badge" title={`Pre-join filter (slice) — ${count(report.preJoin, 'rule')}`}>
+                  <Layers size={12} />
                 </span>
               )}
               {report.postJoin > 0 && (
-                <span className="dm-badge" title={`${count(report.postJoin, 'output filter')}, applied after the join`}>
+                <span className="dm-badge" title={`Output filter — ${count(report.postJoin, 'rule')}`}>
                   <Filter size={12} />
                 </span>
               )}
@@ -401,8 +403,8 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
               )}
             </div>
             <div className="dm-node-foot">
-              <span className={`dm-status dm-${runTone(report.lastRunStatus)}`}>
-                {report.lastRunStatus === 'ERROR' ? <CircleAlert size={14} /> : <CircleCheck size={14} />}
+              <span className={`dm-status dm-${runTone(report.lastRunStatus)}`} title={report.lastRunStatus}>
+                <RunIcon status={report.lastRunStatus} />
               </span>
               <span className="dm-muted dm-run">{report.lastRunAt ? ago(report.lastRunAt) : 'never run'}</span>
             </div>
@@ -737,6 +739,14 @@ const scheduleLabel = (schedule: { cron?: string; nextRun?: string }) =>
   `Scheduled refresh is active${schedule.cron ? ` (${schedule.cron})` : ''}${
     schedule.nextRun ? `, next ${ago(schedule.nextRun)}` : ''
   }`
+
+/** The glyphs the host's own report table uses for a run. */
+function RunIcon({ status }: { status?: string }) {
+  if (status === 'ERROR') return <XCircle size={14} />
+  if (status === 'SUCCESS') return <CircleCheck size={14} />
+  if (status === 'RUNNING') return <Loader2 size={14} className="dm-spin" />
+  return <CircleDashed size={14} />
+}
 
 const runTone = (status?: string) => (status === 'ERROR' ? 'bad' : status === 'SUCCESS' ? 'ok' : 'idle')
 
