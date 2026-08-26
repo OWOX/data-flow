@@ -168,10 +168,20 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
   ])
   const [reportSearch, setReportSearch] = useState('')
   const [reportLimit, setReportLimit] = useState(PAGE)
-  // Selecting something re-aims the Reports block, so its page count starts over with it.
+  /**
+   * What the Reports block is narrowed to, which is not the same as what is selected.
+   *
+   * Selecting a report inside a narrowed list must not widen it again: the list would re-page from
+   * the top and the very card just clicked could fall past the cap and vanish under the pointer.
+   * Only a data mart, a destination, or clearing the selection re-aims the block.
+   */
+  const [scope, setScope] = useState<string | null>(null)
   const onPin = useCallback((id: string | null) => {
     setPinned(id)
-    setReportLimit(PAGE)
+    if (id === null || id.startsWith('dm-') || id.startsWith('dd-')) {
+      setScope(id)
+      setReportLimit(PAGE)
+    }
   }, [])
 
   const marts = useMemo(() => {
@@ -188,8 +198,8 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
   const destinations = model.destinations.filter(destination => types.includes(destination.type))
 
   // Selecting a data mart or a destination turns the Reports block into that card's reports.
-  const selectedMart = pinned?.startsWith('dm-') ? pinned.slice(3) : null
-  const selectedDestination = pinned?.startsWith('dd-') ? pinned.slice(3) : null
+  const selectedMart = scope?.startsWith('dm-') ? scope.slice(3) : null
+  const selectedDestination = scope?.startsWith('dd-') ? scope.slice(3) : null
   const selectedTitle = selectedMart
     ? model.marts.find(mart => mart.id === selectedMart)?.title
     : model.destinations.find(destination => destination.id === selectedDestination)?.title
@@ -241,8 +251,14 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
     }
     return [...page, ...model.marts.filter(mart => wanted.has(mart.id) && !on.has(mart.id))]
   }, [marts, limit, pinned, model.chains, model.wires, model.marts])
-  const shownReports = reports.slice(0, reportLimit)
-  const revision = `${limit}|${storages}|${flags}|${martSearch}|${types}|${reportSearch}|${reportLimit}|${pinned}`
+  // The selected report is on screen whatever the paging says, for the same reason its data mart is.
+  const shownReports = useMemo(() => {
+    const page = reports.slice(0, reportLimit)
+    const id = pinned?.startsWith('rp-') ? pinned.slice(3) : null
+    if (!id || page.some(report => report.id === id)) return page
+    return [...page, ...model.reports.filter(report => report.id === id)]
+  }, [reports, reportLimit, pinned, model.reports])
+  const revision = `${limit}|${storages}|${flags}|${martSearch}|${types}|${reportSearch}|${reportLimit}|${pinned}|${scope}`
   useWires(canvas, model.wires, model.chains, revision, pinned, onPin)
 
   const createMart = `/ui/${ctx.projectId}/data-marts/create`
@@ -445,7 +461,7 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
           </NodeCard>
         ))}
         <MoreCard
-          shown={shownReports.length}
+          shown={Math.min(reportLimit, reports.length)}
           total={reports.length}
           onMore={() => setReportLimit(reportLimit + PAGE)}
         />
