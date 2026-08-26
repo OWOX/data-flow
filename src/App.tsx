@@ -87,6 +87,12 @@ const EXIT_TYPES = [
 
 const FACETS = [...new Set(FLAGS.map(flag => flag.facet))]
 
+/** The Reports block's own filter: the one thing about a report that is not on its card's face. */
+const REPORT_FLAGS: Array<{ key: string; label: string; test: (report: Report) => boolean }> = [
+  { key: 'triggers', label: 'With triggers', test: report => (report.schedule?.total ?? 0) > 0 },
+  { key: 'no-triggers', label: 'Without triggers', test: report => !report.schedule?.total },
+]
+
 /** Everything the four blocks read. Canvas works it out; each block takes the whole thing. */
 type Page = {
   ctx: PluginContext
@@ -114,6 +120,8 @@ type Page = {
   selectedTitle?: string
   reportSearch: string
   setReportSearch: (value: string) => void
+  reportFlags: string[]
+  setReportFlags: (value: string[]) => void
   reportLimit: number
   setReportLimit: (value: number) => void
   state: CardState
@@ -174,6 +182,7 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
     ...EXIT_TYPES.map(row => row.type),
   ])
   const [reportSearch, setReportSearch] = useState('')
+  const [reportFlags, setReportFlags] = useState(() => REPORT_FLAGS.map(flag => flag.key))
   const [reportLimit, setReportLimit] = useState(PAGE)
   /**
    * What the Reports block is narrowed to, which is not the same as what is selected.
@@ -218,13 +227,16 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
 
   const reports = useMemo(() => {
     const needle = reportSearch.trim().toLowerCase()
+    const chosen = REPORT_FLAGS.filter(flag => reportFlags.includes(flag.key))
     return model.reports.filter(
       report =>
         (!selectedMart || report.martId === selectedMart) &&
         (!selectedDestination || report.destinationId === selectedDestination) &&
-        (needle === '' || reportName(report).toLowerCase().includes(needle)),
+        (needle === '' || reportName(report).toLowerCase().includes(needle)) &&
+        // Nothing ticked constrains nothing, as in the Data Marts filter.
+        (chosen.length === 0 || chosen.some(flag => flag.test(report))),
     )
-  }, [model.reports, selectedMart, selectedDestination, reportSearch])
+  }, [model.reports, selectedMart, selectedDestination, reportSearch, reportFlags])
 
   // `<details name>` closes the other menu when one opens; nothing but this closes the last one
   // when the pointer goes elsewhere.
@@ -317,6 +329,8 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
     selectedTitle,
     reportSearch,
     setReportSearch,
+    reportFlags,
+    setReportFlags,
     reportLimit,
     setReportLimit,
     state,
@@ -489,7 +503,19 @@ function DestinationsBlock({ state, ctx, model, destinations, destinationCards, 
   )
 }
 
-function ReportsBlock({ state, ctx, reports, reportCards, selectedTitle, reportSearch, setReportSearch, reportLimit, setReportLimit }: Page) {
+function ReportsBlock({
+  state,
+  ctx,
+  reports,
+  reportCards,
+  selectedTitle,
+  reportSearch,
+  setReportSearch,
+  reportFlags,
+  setReportFlags,
+  reportLimit,
+  setReportLimit,
+}: Page) {
   return (
       <Block
         icon={FileText}
@@ -497,14 +523,26 @@ function ReportsBlock({ state, ctx, reports, reportCards, selectedTitle, reportS
         count={reports.length}
         hint={`The ${PAGE} most recently run reports. Select a data mart or a destination above and this block narrows to its reports.`}
         toolbar={
-          <SearchBox
-            value={reportSearch}
-            onChange={next => {
-              setReportSearch(next)
-              setReportLimit(PAGE)
-            }}
-            label="Search reports"
-          />
+          <>
+            <SearchBox
+              value={reportSearch}
+              onChange={next => {
+                setReportSearch(next)
+                setReportLimit(PAGE)
+              }}
+              label="Search reports"
+            />
+            <MultiSelect
+              label="Filter"
+              options={REPORT_FLAGS.map(flag => ({ value: flag.key, label: flag.label }))}
+              emptyMeans="all"
+              selected={reportFlags}
+              onChange={next => {
+                setReportFlags(next)
+                setReportLimit(PAGE)
+              }}
+            />
+          </>
         }
       >
         {reportCards.items.map(report => (
