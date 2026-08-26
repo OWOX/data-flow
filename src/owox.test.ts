@@ -35,6 +35,8 @@ const ctx = (over: Record<string, unknown> = {}) => {
             { id: 'r3', title: 'Blend export', lastRunAt: '2026-08-01T00:00:00Z', lastRunStatus: 'SUCCESS', dataMart: { id: 'm3' }, dataDestinationAccess: { id: 'd3', type: 'LOOKER_STUDIO' } },
             // A report on a mart this member cannot list must not invent a card.
             { id: 'r4', title: 'Ghost', dataMart: { id: 'gone' }, dataDestinationAccess: { id: 'd3', type: 'LOOKER_STUDIO' } },
+            // Created but never run — a Looker destination nobody activated. No line from m2.
+            { id: 'r5', title: 'Never run', dataMart: { id: 'm2' }, dataDestinationAccess: { id: 'd3', type: 'LOOKER_STUDIO' } },
           ],
     postJson: async () => ({ items: [{ dataMartId: 'm1', summary: { state: 'PASSED' } }] }),
     ...over,
@@ -66,9 +68,9 @@ test('the whole graph: cards, order, badges and lines', async () => {
 
   assert.deepEqual(model.destinationTypes.map(d => [d.type, d.destinations]), [['GOOGLE_SHEETS', 2], ['LOOKER_STUDIO', 1]])
   // Looker counts two: a report whose data mart this member cannot see still writes to it.
-  assert.deepEqual(model.destinations.map(d => [d.title, d.reports]), [['Looker', 2], ['Sheet A', 1], ['Sheet B', 1]])
+  assert.deepEqual(model.destinations.map(d => [d.title, d.reports]), [['Looker', 3], ['Sheet A', 1], ['Sheet B', 1]])
   // Most recently run first.
-  assert.deepEqual(model.reports.map(r => r.id), ['r2', 'r1', 'r3', 'r4'])
+  assert.deepEqual(model.reports.map(r => r.id), ['r2', 'r1', 'r3', 'r4', 'r5'])
 
   assert.deepEqual(model.wires, [
     { from: 'src-facebookads', to: 'dm-m1', kind: 'source' },
@@ -83,7 +85,14 @@ test('the whole graph: cards, order, badges and lines', async () => {
     { from: 'dd-d2', to: 'rp-r2', kind: 'run' },
     { from: 'dd-d3', to: 'rp-r3', kind: 'run' },
     { from: 'dd-d3', to: 'rp-r4', kind: 'run' },
+    { from: 'dd-d3', to: 'rp-r5', kind: 'run' },
   ])
+
+  // A report reaches back to the one data mart that feeds it, and on to its source.
+  assert.deepEqual(
+    model.chains.filter(chain => chain.includes('rp-r1')),
+    [['src-facebookads', 'dm-m1', 'dt-GOOGLE_SHEETS', 'dd-d1', 'rp-r1']],
+  )
 })
 
 test('an endpoint the member cannot read costs only its own detail', async () => {

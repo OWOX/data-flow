@@ -8,6 +8,9 @@ import type { Wire } from './owox'
 
 const NS = 'http://www.w3.org/2000/svg'
 
+/** A wire is the same wire whichever end you name first. */
+const pair = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`)
+
 type Box = { left: number; right: number; top: number; bottom: number; width: number; height: number }
 
 /** Leave each box from the side that faces the other one: down/up across bands, sideways within one. */
@@ -39,6 +42,7 @@ function curve(a: Box, b: Box) {
 export function useWires(
   canvasRef: RefObject<HTMLDivElement | null>,
   wires: Wire[],
+  chains: string[][],
   revision: unknown,
   pinned: string | null,
   onPin: (id: string | null) => void,
@@ -94,15 +98,36 @@ export function useWires(
     observer.observe(canvas)
 
     const cards = () => canvas.querySelectorAll<HTMLElement>('[data-node]')
+
+    /**
+     * What one card lights: its own wires, and every whole chain it sits on — so a report reaches
+     * up through its destination and type to the data mart that feeds it, and on to that mart's
+     * source, without lighting the other marts hanging off the same destination type.
+     */
+    const reach = (id: string) => {
+      const lit = new Set<string>([id, ...(neighbours.get(id) ?? [])])
+      const links = new Set<string>()
+      for (const chain of chains) {
+        if (!chain.includes(id)) continue
+        for (const [i, node] of chain.entries()) {
+          lit.add(node)
+          if (i > 0) links.add(pair(chain[i - 1], node))
+        }
+      }
+      return { lit, links }
+    }
+
     const focus = (id: string | null) => {
       canvas.classList.toggle('focused', Boolean(id))
-      const near = neighbours.get(id ?? '') ?? new Set<string>()
+      const { lit, links } = id ? reach(id) : { lit: new Set<string>(), links: new Set<string>() }
       for (const el of cards()) {
-        el.classList.toggle('lit', Boolean(id) && (el.id === id || near.has(el.id)))
+        el.classList.toggle('lit', lit.has(el.id))
         el.setAttribute('aria-pressed', String(el.id === pinned))
       }
       for (const path of paths) {
-        path.classList.toggle('lit', Boolean(id) && (path.dataset.from === id || path.dataset.to === id))
+        const from = path.dataset.from ?? ''
+        const to = path.dataset.to ?? ''
+        path.classList.toggle('lit', Boolean(id) && (from === id || to === id || links.has(pair(from, to))))
       }
     }
     focus(pinned)
@@ -149,5 +174,5 @@ export function useWires(
       canvas.classList.remove('focused')
       for (const path of paths) path.remove()
     }
-  }, [canvasRef, wires, revision, pinned, onPin])
+  }, [canvasRef, wires, chains, revision, pinned, onPin])
 }

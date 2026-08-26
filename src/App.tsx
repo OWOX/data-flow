@@ -1,32 +1,23 @@
 import { connect, type PluginContext } from '@owox/plugin-sdk'
 import {
-  BarChart3,
+  ArchiveRestore,
+  Bot,
+  Box,
+  BrainCircuit,
   ChevronDown,
   CircleAlert,
   CircleCheck,
   CircleDashed,
   Clock,
-  Code2,
   Database,
   ExternalLink,
-  Eye,
-  FileBarChart,
+  FileText,
   Info,
+  KeyRound,
   Layers,
-  Mail,
-  MessageSquare,
-  MessagesSquare,
   Plug,
   Plus,
-  Search,
-  Send,
-  Server,
-  Sheet,
-  Snowflake,
-  Table2,
-  Users,
-  Boxes,
-  Cloud,
+  Sparkles,
   Waypoints,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -41,37 +32,11 @@ import {
   type Model,
   type QualityState,
 } from './owox'
+import { DESTINATION, KIND, STORAGE, type Mark } from './icons'
 import { useWires } from './wires'
 
 /** How many cards are on screen before the rest wait behind the block's "load more". */
 const PAGE = 25
-
-const KIND = {
-  CONNECTOR: { icon: Plug, label: 'connector' },
-  SQL: { icon: Code2, label: 'sql' },
-  VIEW: { icon: Eye, label: 'view' },
-  TABLE: { icon: Table2, label: 'table' },
-  TABLE_PATTERN: { icon: Table2, label: 'table' },
-}
-
-const DESTINATION = {
-  GOOGLE_SHEETS: { icon: Sheet, label: 'Google Sheets' },
-  LOOKER_STUDIO: { icon: BarChart3, label: 'Looker Studio' },
-  EMAIL: { icon: Mail, label: 'Email' },
-  SLACK: { icon: MessageSquare, label: 'Slack' },
-  MS_TEAMS: { icon: Users, label: 'Microsoft Teams' },
-  GOOGLE_CHAT: { icon: MessagesSquare, label: 'Google Chat' },
-}
-
-/** No brand marks in lucide, so each warehouse gets the glyph that reads closest to it. */
-const STORAGE = {
-  GOOGLE_BIGQUERY: Cloud,
-  LEGACY_GOOGLE_BIGQUERY: Cloud,
-  SNOWFLAKE: Snowflake,
-  AWS_ATHENA: Search,
-  AWS_REDSHIFT: Server,
-  DATABRICKS: Boxes,
-}
 
 /** PASSED / ISSUES / failed / not-run, in the four tones the card footer can show. */
 const QUALITY: Record<QualityState, { tone: 'ok' | 'warn' | 'bad' | 'idle'; label: string }> = {
@@ -170,8 +135,20 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
   const reports = selected ? model.reports.filter(report => report.martId === selected) : model.reports
   const selectedTitle = model.marts.find(mart => mart.id === selected)?.title
 
+  // `<details name>` closes the other menu when one opens; nothing but this closes the last one
+  // when the pointer goes elsewhere.
+  useEffect(() => {
+    const close = (e: MouseEvent) => {
+      for (const menu of document.querySelectorAll<HTMLDetailsElement>('details.dm-filter[open]')) {
+        if (!menu.contains(e.target as Node)) menu.open = false
+      }
+    }
+    document.addEventListener('click', close)
+    return () => document.removeEventListener('click', close)
+  }, [])
+
   const revision = `${limit}|${storages}|${flags}|${selected}`
-  useWires(canvas, model.wires, revision, pinned, onPin)
+  useWires(canvas, model.wires, model.chains, revision, pinned, onPin)
 
   const createMart = `/ui/${ctx.projectId}/data-marts/create`
 
@@ -224,7 +201,7 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
       </Block>
 
       <Block
-        icon={Database}
+        icon={Box}
         title="Data Marts"
         count={marts.length}
         hint={`Published before draft, connector-based before the rest, then ordered by how much depends on them: joins in, joins out, reports. ${PAGE} at a time. Quality and freshness sit along the bottom of each card.`}
@@ -236,7 +213,7 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
                 value: storage.title,
                 label: storage.title,
                 count: storage.marts,
-                icon: STORAGE[storage.type as keyof typeof STORAGE] ?? Database,
+                icon: STORAGE[storage.type]?.icon ?? Database,
               }))}
               selected={storages}
               onChange={next => {
@@ -283,8 +260,8 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
         hint="The kinds of destination this project publishes to. Only types with a destination behind them appear."
       >
         {model.destinationTypes.map(destination => {
-          const kind = DESTINATION[destination.type as keyof typeof DESTINATION]
-          const Icon = kind?.icon ?? Send
+          const kind = DESTINATION[destination.type]
+          const Icon = kind?.icon ?? ArchiveRestore
           return (
             <article
               key={destination.id}
@@ -308,10 +285,24 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
             </article>
           )
         })}
+        <LinkCard
+          icon={BrainCircuit}
+          title="AI"
+          note="Ask this project's data questions"
+          href={`https://app.owox.com/ui/${ctx.projectId}/me/api-keys`}
+          onOpen={() => ctx.ui.navigate(`/ui/${ctx.projectId}/me/api-keys`)}
+        />
+        <LinkCard
+          icon={KeyRound}
+          title="API"
+          note="Read the marts over HTTP"
+          href={`https://app.owox.com/ui/${ctx.projectId}/me/api-keys`}
+          onOpen={() => ctx.ui.navigate(`/ui/${ctx.projectId}/me/api-keys`)}
+        />
       </Block>
 
       <Block
-        icon={Send}
+        icon={ArchiveRestore}
         title="Destinations"
         count={model.destinations.length}
         hint="The destinations themselves, each wired to its type and badged with the reports that write to it."
@@ -322,8 +313,8 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
         }
       >
         {model.destinations.map(destination => {
-          const kind = DESTINATION[destination.type as keyof typeof DESTINATION]
-          const Icon = kind?.icon ?? Send
+          const kind = DESTINATION[destination.type]
+          const Icon = kind?.icon ?? ArchiveRestore
           return (
             <article
               key={destination.id}
@@ -349,10 +340,26 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
             </article>
           )
         })}
+        <LinkCard
+          icon={Sparkles}
+          title="Claude"
+          note="OWOX Data Marts connector"
+          href="https://claude.ai/directory/owox-data-marts"
+          onOpen={() => ctx.ui.openExternal('https://claude.ai/directory/owox-data-marts')}
+        />
+        <LinkCard
+          icon={Bot}
+          title="ChatGPT"
+          note="OWOX Data Marts app"
+          href="https://chatgpt.com/plugins/plugin_asdk_app_6a3e81be8f8481918e1e2cd1d7ea09c4"
+          onOpen={() =>
+            ctx.ui.openExternal('https://chatgpt.com/plugins/plugin_asdk_app_6a3e81be8f8481918e1e2cd1d7ea09c4')
+          }
+        />
       </Block>
 
       <Block
-        icon={FileBarChart}
+        icon={FileText}
         title={selectedTitle ? `Reports · ${selectedTitle}` : 'Reports'}
         count={reports.length}
         hint={`The ${PAGE} most recently run reports. Select a data mart above and this block narrows to that mart's reports.`}
@@ -446,7 +453,7 @@ function Block({
   footer,
   children,
 }: {
-  icon: typeof Plug
+  icon: Mark
   title: string
   count?: number
   hint: string
@@ -488,7 +495,7 @@ function MultiSelect({
   onChange,
 }: {
   label: string
-  options: Array<{ value: string; label: string; group?: string; count?: number; icon?: typeof Plug }>
+  options: Array<{ value: string; label: string; group?: string; count?: number; icon?: Mark }>
   selected: string[]
   onChange: (next: string[]) => void
 }) {
@@ -550,6 +557,49 @@ function MultiSelect({
         )}
       </div>
     </details>
+  )
+}
+
+/**
+ * A card that is a way out rather than a thing OWOX stores — the API keys page, Claude, ChatGPT.
+ *
+ * The href is real so the address is visible and copyable, but the host does the opening: this
+ * frame can neither navigate the app around it nor open a tab on its own.
+ */
+function LinkCard({
+  icon: Icon,
+  title,
+  note,
+  href,
+  onOpen,
+}: {
+  icon: Mark
+  title: string
+  note: string
+  href: string
+  onOpen: () => void
+}) {
+  return (
+    <a
+      className="dm-node dm-linkcard"
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      onClick={e => {
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
+        e.preventDefault()
+        onOpen()
+      }}
+    >
+      <div className="dm-node-head">
+        <span className="dm-logo">
+          <Icon size={16} />
+        </span>
+        <span className="dm-node-title">{title}</span>
+        <ExternalLink size={14} className="dm-link" />
+      </div>
+      <div className="dm-muted dm-node-sub">{note}</div>
+    </a>
   )
 }
 

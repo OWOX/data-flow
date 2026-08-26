@@ -137,6 +137,10 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
   transition: opacity 150ms, box-shadow 150ms;
 }
 .dm-static { cursor: default; }
+/* A way out of OWOX rather than a stored thing: same card, no wires, opened by the host. */
+.dm-linkcard { text-decoration: none; color: inherit; }
+.dm-linkcard:hover { border-color: var(--muted-foreground); }
+.dm-linkcard .dm-logo { color: var(--foreground); }
 .dm-node:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--primary); }
 .dm-node-head { display: flex; align-items: center; gap: 0.5rem; }
 .dm-node-title { flex: 1; min-width: 0; font-size: 0.875rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

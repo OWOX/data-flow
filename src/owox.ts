@@ -63,6 +63,14 @@ export type Model = {
   reports: Report[]
   storages: Storage[]
   wires: Wire[]
+  /**
+   * Source → data mart → destination type → destination → report, one chain per report.
+   *
+   * Selecting a card lights every chain it appears on, which is how a report reaches back up to
+   * the one data mart that feeds it instead of every mart that happens to share its destination
+   * type. Consecutive ids in a chain are always a real wire, in one direction or the other.
+   */
+  chains: string[][]
 }
 
 export const sourceId = (key: string) => `src-${key.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`
@@ -208,10 +216,13 @@ export async function loadModel(ctx: PluginContext): Promise<Model> {
     wires.push({ from: martId(edge.from), to: martId(edge.to), kind: 'relationship' })
   }
   // Several reports commonly run one mart into one destination type: one line, not one per report.
+  //
+  // A report that has never run is not a route the data takes yet — a Looker Studio destination
+  // nobody has activated, a Google Sheets report created and left alone — so it draws no line.
   const seen = new Set<string>()
   for (const report of reports) {
     const type = report.destinationId ? destinationBy.get(report.destinationId)?.type : undefined
-    if (!report.martId || !type || !known.has(report.martId)) continue
+    if (!report.martId || !type || !known.has(report.martId) || !report.lastRunAt) continue
     const key = `${report.martId}>${type}`
     if (seen.has(key)) continue
     seen.add(key)
@@ -226,6 +237,29 @@ export async function loadModel(ctx: PluginContext): Promise<Model> {
     }
   }
 
+  const martBy = new Map(marts.map(m => [m.id, m]))
+  const chains: string[][] = []
+  for (const report of reports) {
+    const mart = report.martId ? martBy.get(report.martId) : undefined
+    const destination = report.destinationId ? destinationBy.get(report.destinationId) : undefined
+    if (!destination) continue
+    chains.push(
+      [
+        mart?.source && sources.has(mart.source) ? sourceId(mart.source) : undefined,
+        mart ? martId(mart.id) : undefined,
+        typeId(destination.type),
+        destId(destination.id),
+        reportId(report.id),
+      ].filter((id): id is string => Boolean(id)),
+    )
+  }
+  // A mart with no reports still hangs off its source.
+  for (const mart of marts) {
+    if (mart.reports === 0 && mart.source && sources.has(mart.source)) {
+      chains.push([sourceId(mart.source), martId(mart.id)])
+    }
+  }
+
   return {
     sources: [...sources.values()].sort((a, b) => b.marts - a.marts || a.name.localeCompare(b.name)),
     marts,
@@ -236,6 +270,7 @@ export async function loadModel(ctx: PluginContext): Promise<Model> {
     reports: reports.sort((a, b) => (b.lastRunAt ?? '').localeCompare(a.lastRunAt ?? '')),
     storages: storageList(marts),
     wires,
+    chains,
   }
 }
 
