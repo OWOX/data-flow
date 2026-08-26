@@ -123,8 +123,8 @@ export function MartCard({
           )}
           {mart.fields !== undefined && <span className="dm-badge">{mart.fields} fields</span>}
           {mart.triggers > 0 && (
-            <span className="dm-badge" title={count(mart.triggers, 'trigger')}>
-              <CalendarClock size={12} /> {mart.triggers}
+            <span className="dm-badge dm-badge-shrink" title={count(mart.triggers, 'trigger')}>
+              <CalendarClock size={12} /> {count(mart.triggers, 'trigger')}
             </span>
           )}
           {mart.outbound > 0 && (
