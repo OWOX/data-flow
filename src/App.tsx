@@ -525,22 +525,27 @@ function MultiSelect({
             ref={box => {
               if (box) box.indeterminate = !all
             }}
-            onChange={e => onChange(e.target.checked ? options.map(option => option.value) : [])}
+            // Unchecking it would ask for "none", which filters to nothing anyone wants to see.
+            onChange={e => e.target.checked && onChange(options.map(option => option.value))}
           />
           Select all
         </label>
         {rows.map(({ option, heading }) => (
           <div key={option.value}>
             {heading && <p className="dm-muted dm-filter-group">{heading}</p>}
-            <label className={selected.includes(option.value) ? 'dm-on' : undefined}>
+            <label className={all || selected.includes(option.value) ? 'dm-on' : undefined}>
               <input
                 type="checkbox"
-                checked={selected.includes(option.value)}
+                // Everything is included when nothing is picked, so every row reads that way too.
+                checked={all || selected.includes(option.value)}
                 onChange={e =>
                   onChange(
                     e.target.checked
                       ? [...selected, option.value]
-                      : selected.filter(value => value !== option.value),
+                      : // Dropping one out of "all" leaves the others behind, not an empty menu.
+                        (all ? options.map(o => o.value) : selected).filter(
+                          value => value !== option.value,
+                        ),
                   )
                 }
               />
