@@ -3,6 +3,7 @@ import {
   ArchiveRestore,
   Bot,
   Box,
+  CalendarClock,
   ChevronDown,
   CircleAlert,
   CircleCheck,
@@ -357,7 +358,6 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
             ctx={ctx}
             id={reportId(report.id)}
             title={report.title}
-            note={report.martTitle ?? 'Unknown data mart'}
             link={
               report.martId
                 ? `/ui/${ctx.projectId}/data-marts/${report.martId}/reports?reportId=${report.id}`
@@ -370,6 +370,11 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
                 {report.lastRunStatus === 'ERROR' ? <CircleAlert size={14} /> : <CircleCheck size={14} />}
               </span>
               <span className="dm-muted dm-run">{report.lastRunAt ? ago(report.lastRunAt) : 'never run'}</span>
+              {report.schedule && (
+                <span className="dm-status dm-ok dm-scheduled" title={scheduleLabel(report.schedule)}>
+                  <CalendarClock size={14} />
+                </span>
+              )}
             </div>
           </NodeCard>
         ))}
@@ -696,6 +701,12 @@ const initials = (name: string) =>
     .slice(0, 2)
     .map(word => word[0]?.toUpperCase())
     .join('')
+
+/** The host's own Triggers glyph, so an active refresh reads the same here as it does there. */
+const scheduleLabel = (schedule: { cron?: string; nextRun?: string }) =>
+  `Scheduled refresh is active${schedule.cron ? ` (${schedule.cron})` : ''}${
+    schedule.nextRun ? `, next ${ago(schedule.nextRun)}` : ''
+  }`
 
 const runTone = (status?: string) => (status === 'ERROR' ? 'bad' : status === 'SUCCESS' ? 'ok' : 'idle')
 

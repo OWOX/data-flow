@@ -28,6 +28,15 @@ const ctx = (over: Record<string, unknown> = {}) => {
     getJson: async (path: string) =>
       path === '/api/connectors'
         ? [{ name: 'FacebookAds', title: 'Facebook Ads' }]
+        : path === '/api/data-marts/scheduled-triggers'
+        ? {
+            triggers: [
+              { type: 'REPORT_RUN', isActive: true, cronExpression: '0 6 * * *', triggerConfig: { reportId: 'r1' } },
+              // Paused, and a connector refresh: neither marks a report.
+              { type: 'REPORT_RUN', isActive: false, triggerConfig: { reportId: 'r2' } },
+              { type: 'CONNECTOR_RUN', isActive: true, triggerConfig: {} },
+            ],
+          }
         : [
             // Two reports, same mart, same destination type — one line, not two.
             { id: 'r1', title: 'Daily', lastRunAt: '2026-08-02T00:00:00Z', lastRunStatus: 'SUCCESS', dataMart: { id: 'm1', title: 'Facebook ads' }, dataDestinationAccess: { id: 'd1', type: 'GOOGLE_SHEETS' } },
@@ -69,6 +78,10 @@ test('the whole graph: cards, order, badges and lines', async () => {
   assert.deepEqual(model.destinationTypes.map(d => [d.type, d.destinations]), [['GOOGLE_SHEETS', 2], ['LOOKER_STUDIO', 1]])
   // Looker counts two: a report whose data mart this member cannot see still writes to it.
   assert.deepEqual(model.destinations.map(d => [d.title, d.reports]), [['Looker', 3], ['Sheet A', 1], ['Sheet B', 1]])
+  // Only the live report trigger marks its report.
+  assert.equal(model.reports.find(r => r.id === 'r1')?.schedule?.cron, '0 6 * * *')
+  assert.equal(model.reports.find(r => r.id === 'r2')?.schedule, undefined)
+
   // Most recently run first.
   assert.deepEqual(model.reports.map(r => r.id), ['r2', 'r1', 'r3', 'r4', 'r5'])
 

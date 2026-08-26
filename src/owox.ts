@@ -45,10 +45,11 @@ export type Report = {
   id: string
   title: string
   martId?: string
-  martTitle?: string
   destinationId?: string
   lastRunAt?: string
   lastRunStatus?: string
+  /** Set when an active scheduled trigger refreshes this report. */
+  schedule?: { cron?: string; nextRun?: string }
 }
 
 export type Wire = {
@@ -102,6 +103,13 @@ type RawReport = {
   dataDestinationAccess?: { id?: string; title?: string; type?: string } | null
 }
 type QualityRow = { dataMartId: string; summary?: { state?: QualityState } | null }
+type Trigger = {
+  type?: string
+  isActive?: boolean
+  cronExpression?: string
+  nextRunTimestamp?: unknown
+  triggerConfig?: { reportId?: string } | null
+}
 
 /** Field counts and join edges are both scoped to one storage at a time by the model-canvas route. */
 async function perStorage(ctx: PluginContext, storageIds: string[]) {
@@ -135,9 +143,10 @@ export async function loadModel(ctx: PluginContext): Promise<Model> {
     optional(() => ctx.owox.storages.list(), [] as Awaited<ReturnType<typeof ctx.owox.storages.list>>),
   ])
 
-  const [connectors, rawReports, quality, canvas] = await Promise.all([
+  const [connectors, rawReports, triggers, quality, canvas] = await Promise.all([
     optional(() => ctx.owox.getJson<Connector[]>('/api/connectors'), []),
     optional(() => ctx.owox.getJson<RawReport[]>('/api/reports'), []),
+    optional(() => ctx.owox.getJson<{ triggers?: Trigger[] }>('/api/data-marts/scheduled-triggers'), {}),
     optional(
       () =>
         ctx.owox.postJson<{ items?: QualityRow[] }>('/api/data-marts/data-quality/summaries', {
@@ -157,14 +166,25 @@ export async function loadModel(ctx: PluginContext): Promise<Model> {
   const inbound = tally(edges.map(e => e.to))
   const outbound = tally(edges.map(e => e.from))
 
+  // One project-wide call covers every report's refresh schedule; only the live ones count.
+  const scheduled = new Map<string, { cron?: string; nextRun?: string }>()
+  for (const trigger of triggers.triggers ?? []) {
+    const reportId = trigger.triggerConfig?.reportId
+    if (trigger.type !== 'REPORT_RUN' || !trigger.isActive || !reportId) continue
+    scheduled.set(reportId, {
+      cron: trigger.cronExpression,
+      nextRun: typeof trigger.nextRunTimestamp === 'string' ? trigger.nextRunTimestamp : undefined,
+    })
+  }
+
   const reports: Report[] = rawReports.map((report, i) => ({
     id: report.id ?? `report-${i}`,
     title: report.title ?? 'Untitled report',
     martId: report.dataMart?.id,
-    martTitle: report.dataMart?.title,
     destinationId: report.dataDestinationAccess?.id,
     lastRunAt: report.lastRunAt,
     lastRunStatus: report.lastRunStatus,
+    schedule: report.id ? scheduled.get(report.id) : undefined,
   }))
   const reportsPerMart = tally(reports.map(r => r.martId))
   const reportsPerDestination = tally(reports.map(r => r.destinationId))
