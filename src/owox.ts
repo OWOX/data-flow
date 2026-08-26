@@ -17,6 +17,17 @@ export type QualityState =
   | 'CANCELLED'
   | 'ALL_DISABLED'
 
+/** As much of OWOX's compact summary as its own status icon reads. */
+export type QualitySummary = {
+  state: QualityState
+  totalChecks?: number
+  notApplicableChecks?: number
+  noticeFindings?: number
+  warningFindings?: number
+  errorFindings?: number
+  highestSeverity?: 'notice' | 'warning' | 'error' | null
+}
+
 type Freshness = { dataLastUpdatedAt?: string | null; coverage?: 'complete' | 'partial' | 'unavailable' }
 
 export type Source = { key: string; name: string; logo?: string; marts: number }
@@ -30,7 +41,7 @@ export type Mart = {
   storage: string
   storageType: string
   fields?: number
-  quality?: QualityState
+  quality?: QualitySummary
   freshness?: Freshness
   inbound: number
   outbound: number
@@ -121,7 +132,7 @@ type RawReport = {
   dataMart?: { id?: string; title?: string } | null
   dataDestinationAccess?: { id?: string; title?: string; type?: string } | null
 }
-type QualityRow = { dataMartId: string; summary?: { state?: QualityState } | null }
+type QualityRow = { dataMartId: string; summary?: QualitySummary | null }
 type Trigger = {
   type?: string
   isActive?: boolean
@@ -177,7 +188,7 @@ export async function loadModel(ctx: PluginContext): Promise<Model> {
   ])
 
   const connectorBy = new Map(connectors.map(c => [c.name, c]))
-  const qualityBy = new Map((quality.items ?? []).map(row => [row.dataMartId, row.summary?.state]))
+  const qualityBy = new Map((quality.items ?? []).map(row => [row.dataMartId, row.summary ?? undefined]))
   const known = new Set(dataMarts.map(m => m.id))
   const destinationBy = new Map(destinations.map(d => [d.id, d]))
 
@@ -223,7 +234,7 @@ export async function loadModel(ctx: PluginContext): Promise<Model> {
 
   const marts: Mart[] = dataMarts
     .map(m => {
-      const state = qualityBy.get(m.id)
+      const state = qualityBy.get(m.id)?.state
       return {
         id: m.id,
         title: m.title,
@@ -233,7 +244,7 @@ export async function loadModel(ctx: PluginContext): Promise<Model> {
         storage: m.storage?.title ?? 'Unknown storage',
         storageType: m.storage?.type ?? 'UNKNOWN',
         fields: canvas.fields.get(m.id),
-        quality: state,
+        quality: qualityBy.get(m.id),
         freshness: (m.dataLastUpdated as Freshness | undefined) ?? undefined,
         inbound: inbound.get(m.id) ?? 0,
         outbound: outbound.get(m.id) ?? 0,

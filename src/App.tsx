@@ -5,22 +5,29 @@ import {
   Box,
   CalendarClock,
   ChevronDown,
-  CircleAlert,
   Columns3,
   CircleCheck,
   CircleDashed,
-  Clock,
   Database,
   ExternalLink,
   FileText,
   Filter,
+  History,
   Info,
   KeyRound,
   Loader2,
+  LoaderCircle,
   Plug,
   Plus,
   Layers,
   Search,
+  Shield,
+  ShieldAlert,
+  ShieldBan,
+  ShieldCheck,
+  ShieldMinus,
+  ShieldOff,
+  ShieldX,
   Sigma,
   Sparkles,
   Waypoints,
@@ -35,7 +42,7 @@ import {
   sourceId,
   type Mart,
   type Model,
-  type QualityState,
+  type QualitySummary,
   type Report,
 } from './owox'
 import { DESTINATION, KIND, STORAGE, type Mark } from './icons'
@@ -44,17 +51,45 @@ import { useWires } from './wires'
 /** How many cards are on screen before the rest wait behind the block's "load more". */
 const PAGE = 25
 
-/** PASSED / ISSUES / failed / not-run, in the four tones the card footer can show. */
-const QUALITY: Record<QualityState, { tone: 'ok' | 'warn' | 'bad' | 'idle'; label: string }> = {
-  PASSED: { tone: 'ok', label: 'Data quality: passed' },
-  ISSUES: { tone: 'warn', label: 'Data quality: issues found' },
-  EXECUTION_FAILED: { tone: 'bad', label: 'Data quality: last run failed' },
-  CANCELLED: { tone: 'idle', label: 'Data quality: last run cancelled' },
-  QUEUED: { tone: 'idle', label: 'Data quality: queued' },
-  RUNNING: { tone: 'idle', label: 'Data quality: running' },
-  NEVER_RUN: { tone: 'idle', label: 'Data quality: never run' },
-  RESTRICTED: { tone: 'idle', label: 'Data quality: not visible to you' },
-  ALL_DISABLED: { tone: 'idle', label: 'Data quality: all checks disabled' },
+/**
+ * The data quality status icon, straight out of the host's `getDataQualityStatusVisual` — same
+ * shields, same labels, same tone per state, so a mart reads the same here as on its own canvas.
+ */
+function qualityVisual(summary?: QualitySummary) {
+  if (!summary) return { icon: Shield, tone: 'idle', label: 'Data quality: unknown', spin: false }
+  const severity =
+    (summary.errorFindings ?? 0) > 0 || summary.highestSeverity === 'error'
+      ? 'bad'
+      : (summary.warningFindings ?? 0) > 0 || summary.highestSeverity === 'warning'
+        ? 'warn'
+        : (summary.noticeFindings ?? 0) > 0 || summary.highestSeverity === 'notice'
+          ? 'notice'
+          : null
+
+  const visual = (icon: Mark, tone: string, label: string, spin = false) => ({ icon, tone, label, spin })
+
+  if (summary.state === 'CANCELLED') return visual(ShieldBan, 'idle', 'Cancelled')
+  if ((summary.totalChecks ?? 0) > 0 && summary.notApplicableChecks === summary.totalChecks) {
+    return visual(ShieldMinus, 'idle', 'No applicable checks')
+  }
+  switch (summary.state) {
+    case 'NEVER_RUN':
+      return visual(Shield, 'idle', 'Never run')
+    case 'ALL_DISABLED':
+      return visual(ShieldOff, 'idle', 'All checks disabled')
+    case 'QUEUED':
+      return visual(LoaderCircle, 'progress', 'Queued', true)
+    case 'RUNNING':
+      return visual(LoaderCircle, 'progress', 'Running', true)
+    case 'PASSED':
+      return visual(ShieldCheck, 'ok', 'Passed')
+    case 'EXECUTION_FAILED':
+      return visual(ShieldX, 'bad', 'Run failed')
+    case 'RESTRICTED':
+      return visual(ShieldBan, 'warn', 'Restricted')
+    case 'ISSUES':
+      return visual(ShieldAlert, severity ?? 'warn', 'Issues found')
+  }
 }
 
 /**
@@ -541,9 +576,8 @@ const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`
 function MartCard({ ctx, mart }: { ctx: PluginContext; mart: Mart }) {
   const kind = mart.kind ? KIND[mart.kind] : undefined
   const KindIcon = kind?.icon
-  const quality = mart.quality ? QUALITY[mart.quality] : undefined
-  const QualityIcon =
-    quality?.tone === 'ok' ? CircleCheck : quality?.tone === 'idle' || !quality ? CircleDashed : CircleAlert
+  const quality = qualityVisual(mart.quality)
+  const QualityIcon = quality.icon
 
   return (
     <article id={martId(mart.id)} data-node tabIndex={0} aria-pressed="false" className="dm-node">
@@ -570,11 +604,11 @@ function MartCard({ ctx, mart }: { ctx: PluginContext; mart: Mart }) {
         {mart.draft && <span className="dm-badge dm-badge-draft">draft</span>}
       </div>
       <div className="dm-node-foot">
-        <span className={`dm-status dm-${quality?.tone ?? 'idle'}`} title={quality?.label ?? 'Data quality: unknown'}>
-          <QualityIcon size={14} />
+        <span className={`dm-status dm-${quality.tone}`} title={`Data quality: ${quality.label}`}>
+          <QualityIcon size={14} className={quality.spin ? 'dm-spin' : undefined} />
         </span>
         <span className={`dm-status dm-${freshnessTone(mart)}`} title={freshnessLabel(mart)}>
-          <Clock size={14} />
+          <History size={14} />
         </span>
       </div>
     </article>

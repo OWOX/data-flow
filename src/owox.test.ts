@@ -75,6 +75,7 @@ test('the whole graph: cards, order, badges and lines', async () => {
   assert.equal(model.marts[0].inbound, 1)
   assert.equal(model.marts[0].reports, 2)
   // PASSED quality, but a report that last ran with an error still marks the mart.
+  assert.equal(model.marts[0].quality?.state, 'PASSED')
   assert.equal(model.marts[0].errors, true)
   assert.equal(model.marts[1].outbound, 1)
   assert.equal(model.marts[2].draft, true)
