@@ -130,6 +130,21 @@ type Trigger = {
   triggerConfig?: { reportId?: string } | null
 }
 
+/**
+ * How many of a data mart's fields a report can actually ask for.
+ *
+ * `isHiddenForReporting` takes a column off the reporting menu, and the model-canvas `fieldCount`
+ * counts the schema as it stands, hidden columns included — so a report with no column picked
+ * returns this number, not that one. One call per data mart, so it is fetched only for the reports
+ * on screen that need it.
+ */
+export async function reportableFields(ctx: PluginContext, martId: string) {
+  type Field = { isHiddenForReporting?: boolean }
+  const mart = await ctx.owox.getJson<{ schema?: { fields?: Field[] } }>(`/api/data-marts/${martId}`)
+  // ponytail: top-level fields only; nested records count as one until someone needs the leaves.
+  return (mart.schema?.fields ?? []).filter(field => !field.isHiddenForReporting).length
+}
+
 /** Field counts and join edges are both scoped to one storage at a time by the model-canvas route. */
 async function perStorage(ctx: PluginContext, storageIds: string[]) {
   const fields = new Map<string, number>()
