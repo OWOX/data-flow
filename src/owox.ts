@@ -19,7 +19,7 @@ export type QualityState =
 
 type Freshness = { dataLastUpdatedAt?: string | null; coverage?: 'complete' | 'partial' | 'unavailable' }
 
-export type Source = { id: string; key: string; name: string; logo?: string; marts: number }
+export type Source = { key: string; name: string; logo?: string; marts: number }
 
 export type Mart = {
   id: string
@@ -38,7 +38,7 @@ export type Mart = {
   errors: boolean
 }
 
-export type DestinationType = { id: string; type: string; destinations: number }
+export type DestinationType = { type: string; destinations: number }
 export type Destination = { id: string; title: string; type: string; reports: number }
 
 export type Report = {
@@ -193,7 +193,6 @@ export async function loadModel(ctx: PluginContext): Promise<Model> {
     if (!mart.source) continue
     const connector = connectorBy.get(mart.source)
     const source = sources.get(mart.source) ?? {
-      id: sourceId(mart.source),
       key: mart.source,
       name: connector?.title || mart.source,
       logo: typeof connector?.logo === 'string' ? connector.logo : undefined,
@@ -263,7 +262,7 @@ export async function loadModel(ctx: PluginContext): Promise<Model> {
   return {
     sources: [...sources.values()].sort((a, b) => b.marts - a.marts || a.name.localeCompare(b.name)),
     marts,
-    destinationTypes: [...perType].map(([type, count]) => ({ id: typeId(type), type, destinations: count })),
+    destinationTypes: [...perType].map(([type, destinations]) => ({ type, destinations })),
     destinations: destinations
       .map(d => ({ id: d.id, title: d.title, type: d.type, reports: reportsPerDestination.get(d.id) ?? 0 }))
       .sort((a, b) => b.reports - a.reports || a.title.localeCompare(b.title)),

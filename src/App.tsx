@@ -51,6 +51,27 @@ const QUALITY: Record<QualityState, { tone: 'ok' | 'warn' | 'bad' | 'idle'; labe
   ALL_DISABLED: { tone: 'idle', label: 'Data quality: all checks disabled' },
 }
 
+/** Ways out of OWOX that no endpoint lists: both live on the project's API keys page. */
+const WAYS_OUT = [
+  { icon: BrainCircuit, title: 'AI', note: "Ask this project's data questions" },
+  { icon: KeyRound, title: 'API', note: 'Read the marts over HTTP' },
+]
+
+const ASSISTANTS = [
+  {
+    icon: Sparkles,
+    title: 'Claude',
+    note: 'OWOX Data Marts connector',
+    to: 'https://claude.ai/directory/owox-data-marts',
+  },
+  {
+    icon: Bot,
+    title: 'ChatGPT',
+    note: 'OWOX Data Marts app',
+    to: 'https://chatgpt.com/plugins/plugin_asdk_app_6a3e81be8f8481918e1e2cd1d7ea09c4',
+  },
+]
+
 /**
  * The attribute filter, in facets.
  *
@@ -177,26 +198,14 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
         hint="Input sources behind the connector data marts below. One card per source, badged with how many data marts it feeds."
       >
         {model.sources.map(source => (
-          <article
-            key={source.id}
+          <NodeCard
+            key={source.key}
             id={sourceId(source.key)}
-            data-node
-            tabIndex={0}
-            aria-pressed="false"
-            className="dm-node"
-          >
-            <div className="dm-node-head">
-              <Logo name={source.name} logo={source.logo} />
-              <span className="dm-node-title" title={source.key}>
-                {source.name}
-              </span>
-            </div>
-            <div className="dm-badges">
-              <span className="dm-badge">
-                {source.marts} data mart{source.marts === 1 ? '' : 's'}
-              </span>
-            </div>
-          </article>
+            mark={<Logo name={source.name} logo={source.logo} />}
+            title={source.name}
+            hint={source.key}
+            badge={count(source.marts, 'data mart')}
+          />
         ))}
       </Block>
 
@@ -243,7 +252,7 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
                 </span>
               </button>
             )}
-            <AddCard ctx={ctx} path={createMart} label="New data mart" />
+            <AddCard ctx={ctx} to={createMart} label="New data mart" />
           </div>
         }
       >
@@ -259,46 +268,18 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
         count={model.destinationTypes.length}
         hint="The kinds of destination this project publishes to. Only types with a destination behind them appear."
       >
-        {model.destinationTypes.map(destination => {
-          const kind = DESTINATION[destination.type]
-          const Icon = kind?.icon ?? ArchiveRestore
-          return (
-            <article
-              key={destination.id}
-              id={typeId(destination.type)}
-              data-node
-              tabIndex={0}
-              aria-pressed="false"
-              className="dm-node"
-            >
-              <div className="dm-node-head">
-                <span className="dm-logo">
-                  <Icon size={16} />
-                </span>
-                <span className="dm-node-title">{kind?.label ?? destination.type}</span>
-              </div>
-              <div className="dm-badges">
-                <span className="dm-badge">
-                  {destination.destinations} destination{destination.destinations === 1 ? '' : 's'}
-                </span>
-              </div>
-            </article>
-          )
-        })}
-        <LinkCard
-          icon={BrainCircuit}
-          title="AI"
-          note="Ask this project's data questions"
-          href={`https://app.owox.com/ui/${ctx.projectId}/me/api-keys`}
-          onOpen={() => ctx.ui.navigate(`/ui/${ctx.projectId}/me/api-keys`)}
-        />
-        <LinkCard
-          icon={KeyRound}
-          title="API"
-          note="Read the marts over HTTP"
-          href={`https://app.owox.com/ui/${ctx.projectId}/me/api-keys`}
-          onOpen={() => ctx.ui.navigate(`/ui/${ctx.projectId}/me/api-keys`)}
-        />
+        {model.destinationTypes.map(type => (
+          <NodeCard
+            key={type.type}
+            id={typeId(type.type)}
+            mark={<Logo icon={DESTINATION[type.type]?.icon ?? ArchiveRestore} />}
+            title={DESTINATION[type.type]?.label ?? type.type}
+            badge={count(type.destinations, 'destination')}
+          />
+        ))}
+        {WAYS_OUT.map(way => (
+          <LinkCard key={way.title} ctx={ctx} to={`/ui/${ctx.projectId}/me/api-keys`} {...way} />
+        ))}
       </Block>
 
       <Block
@@ -308,54 +289,22 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
         hint="The destinations themselves, each wired to its type and badged with the reports that write to it."
         footer={
           <div className="dm-band-grid dm-band-foot">
-            <AddCard ctx={ctx} path={`/ui/${ctx.projectId}/data-destinations`} label="New destination" />
+            <AddCard ctx={ctx} to={`/ui/${ctx.projectId}/data-destinations`} label="New destination" />
           </div>
         }
       >
-        {model.destinations.map(destination => {
-          const kind = DESTINATION[destination.type]
-          const Icon = kind?.icon ?? ArchiveRestore
-          return (
-            <article
-              key={destination.id}
-              id={destId(destination.id)}
-              data-node
-              tabIndex={0}
-              aria-pressed="false"
-              className="dm-node"
-            >
-              <div className="dm-node-head">
-                <span className="dm-logo">
-                  <Icon size={16} />
-                </span>
-                <span className="dm-node-title" title={destination.title}>
-                  {destination.title}
-                </span>
-              </div>
-              <div className="dm-badges">
-                <span className="dm-badge">
-                  {destination.reports} report{destination.reports === 1 ? '' : 's'}
-                </span>
-              </div>
-            </article>
-          )
-        })}
-        <LinkCard
-          icon={Sparkles}
-          title="Claude"
-          note="OWOX Data Marts connector"
-          href="https://claude.ai/directory/owox-data-marts"
-          onOpen={() => ctx.ui.openExternal('https://claude.ai/directory/owox-data-marts')}
-        />
-        <LinkCard
-          icon={Bot}
-          title="ChatGPT"
-          note="OWOX Data Marts app"
-          href="https://chatgpt.com/plugins/plugin_asdk_app_6a3e81be8f8481918e1e2cd1d7ea09c4"
-          onOpen={() =>
-            ctx.ui.openExternal('https://chatgpt.com/plugins/plugin_asdk_app_6a3e81be8f8481918e1e2cd1d7ea09c4')
-          }
-        />
+        {model.destinations.map(destination => (
+          <NodeCard
+            key={destination.id}
+            id={destId(destination.id)}
+            mark={<Logo icon={DESTINATION[destination.type]?.icon ?? ArchiveRestore} />}
+            title={destination.title}
+            badge={count(destination.reports, 'report')}
+          />
+        ))}
+        {ASSISTANTS.map(assistant => (
+          <LinkCard key={assistant.title} ctx={ctx} {...assistant} />
+        ))}
       </Block>
 
       <Block
@@ -397,6 +346,37 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
   )
 }
 
+/** A card that is one end of a wire: a source, a destination type, a destination. */
+function NodeCard({
+  id,
+  mark,
+  title,
+  hint,
+  badge,
+}: {
+  id: string
+  mark: React.ReactNode
+  title: string
+  hint?: string
+  badge: string
+}) {
+  return (
+    <article id={id} data-node tabIndex={0} aria-pressed="false" className="dm-node">
+      <div className="dm-node-head">
+        {mark}
+        <span className="dm-node-title" title={hint ?? title}>
+          {title}
+        </span>
+      </div>
+      <div className="dm-badges">
+        <span className="dm-badge">{badge}</span>
+      </div>
+    </article>
+  )
+}
+
+const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`
+
 function MartCard({ ctx, mart }: { ctx: PluginContext; mart: Mart }) {
   const kind = mart.kind ? KIND[mart.kind] : undefined
   const KindIcon = kind?.icon
@@ -410,7 +390,7 @@ function MartCard({ ctx, mart }: { ctx: PluginContext; mart: Mart }) {
         <span className="dm-node-title" title={mart.title}>
           {mart.title}
         </span>
-        <AppLink ctx={ctx} path={`/ui/${ctx.projectId}/data-marts/${mart.id}`} title="Open this data mart">
+        <AppLink ctx={ctx} to={`/ui/${ctx.projectId}/data-marts/${mart.id}`} title="Open this data mart">
           <ExternalLink size={14} />
         </AppLink>
       </div>
@@ -565,53 +545,36 @@ function MultiSelect({
   )
 }
 
-/**
- * A card that is a way out rather than a thing OWOX stores — the API keys page, Claude, ChatGPT.
- *
- * The href is real so the address is visible and copyable, but the host does the opening: this
- * frame can neither navigate the app around it nor open a tab on its own.
- */
+/** A card whose whole surface is a link — the API keys page, Claude, ChatGPT. */
 function LinkCard({
-  icon: Icon,
+  ctx,
+  icon,
   title,
   note,
-  href,
-  onOpen,
+  to,
 }: {
+  ctx: PluginContext
   icon: Mark
   title: string
   note: string
-  href: string
-  onOpen: () => void
+  to: string
 }) {
   return (
-    <a
-      className="dm-node dm-linkcard"
-      href={href}
-      target="_blank"
-      rel="noreferrer"
-      onClick={e => {
-        if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
-        e.preventDefault()
-        onOpen()
-      }}
-    >
+    <AppLink ctx={ctx} to={to} className="dm-node dm-linkcard">
       <div className="dm-node-head">
-        <span className="dm-logo">
-          <Icon size={16} />
-        </span>
+        <Logo icon={icon} />
         <span className="dm-node-title">{title}</span>
         <ExternalLink size={14} className="dm-link" />
       </div>
       <div className="dm-muted dm-node-sub">{note}</div>
-    </a>
+    </AppLink>
   )
 }
 
 /** A card that adds the thing this block holds. Never a wire endpoint, so no `data-node`. */
-function AddCard({ ctx, path, label }: { ctx: PluginContext; path: string; label: string }) {
+function AddCard({ ctx, to, label }: { ctx: PluginContext; to: string; label: string }) {
   return (
-    <AppLink ctx={ctx} path={path} className="dm-node dm-add" title={label}>
+    <AppLink ctx={ctx} to={to} className="dm-node dm-add" title={label}>
       <Plus size={18} />
       <span>{label}</span>
     </AppLink>
@@ -619,33 +582,38 @@ function AddCard({ ctx, path, label }: { ctx: PluginContext; path: string; label
 }
 
 /**
- * A link into OWOX itself.
+ * A link out of this frame, in-app or external.
  *
- * `ctx.ui.navigate` is what actually moves the host — this frame cannot navigate the app around it.
- * The href stays real so the address is visible, copyable and middle-clickable.
+ * The host does the opening either way: an iframe can neither navigate the app around it nor open
+ * a tab of its own. The href stays real so the address is visible, copyable and middle-clickable.
  */
 function AppLink({
   ctx,
-  path,
+  to,
   className,
   title,
   children,
 }: {
   ctx: PluginContext
-  path: string
+  /** An in-app path (`/ui/…`) or an absolute URL. */
+  to: string
   className?: string
   title?: string
   children: React.ReactNode
 }) {
+  const inApp = to.startsWith('/')
   return (
     <a
-      href={`https://app.owox.com${path}`}
+      href={inApp ? `https://app.owox.com${to}` : to}
       className={className ?? 'dm-link'}
       title={title}
+      target={inApp ? undefined : '_blank'}
+      rel={inApp ? undefined : 'noreferrer'}
       onClick={e => {
         if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
         e.preventDefault()
-        ctx.ui.navigate(path)
+        if (inApp) ctx.ui.navigate(to)
+        else void ctx.ui.openExternal(to)
       }}
     >
       {children}
@@ -653,11 +621,13 @@ function AppLink({
   )
 }
 
-/** The connector's own logo when OWOX gives a usable one, otherwise its initials. */
-function Logo({ name, logo }: { name: string; logo?: string }) {
+/** A card's mark: the connector's own logo when OWOX gives a usable one, a glyph, or initials. */
+function Logo({ name, logo, icon: Icon }: { name?: string; logo?: string; icon?: Mark }) {
   const usable = logo && /^(https?:|data:)/.test(logo)
   return (
-    <span className="dm-logo">{usable ? <img src={logo} alt="" width={16} height={16} /> : initials(name)}</span>
+    <span className="dm-logo">
+      {usable ? <img src={logo} alt="" width={16} height={16} /> : Icon ? <Icon size={16} /> : initials(name ?? '')}
+    </span>
   )
 }
 

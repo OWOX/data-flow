@@ -136,7 +136,6 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
   background: var(--card); cursor: pointer;
   transition: opacity 150ms, box-shadow 150ms;
 }
-.dm-static { cursor: default; }
 /* A way out of OWOX rather than a stored thing: same card, no wires, opened by the host. */
 .dm-linkcard { text-decoration: none; color: inherit; }
 .dm-linkcard:hover { border-color: var(--muted-foreground); }
@@ -185,7 +184,7 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
 /* Hovering a card is the only way to read a graph this dense: everything it does not touch drops
    back, and its own lines come forward. Clicking pins that state so the pointer can leave. */
 .dm-canvas.focused .dm-node { opacity: 0.25; }
-.dm-canvas.focused .dm-node.lit, .dm-canvas.focused .dm-static { opacity: 1; }
+.dm-canvas.focused .dm-node.lit { opacity: 1; }
 .dm-canvas.focused #wires path { opacity: 0.06; }
 .dm-canvas.focused #wires path.lit { opacity: 1; stroke-width: 2; }
 .dm-node[aria-pressed='true'] { box-shadow: 0 0 0 2px var(--primary); }

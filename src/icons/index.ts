@@ -1,7 +1,7 @@
 // Storage, destination and definition-type marks, vendored verbatim from
 // owox-data-marts/apps/web/src/shared/icons so the canvas shows the same glyphs the host does.
 // Self-contained SVG components — no imports, nothing to keep in sync but the files themselves.
-import { Asterisk, Code, Grip, KeyRound, Plug, Sparkles, Table } from 'lucide-react'
+import { Asterisk, Code, Grip, Plug, Table } from 'lucide-react'
 import { AwsAthenaIcon } from './aws-athena-icon'
 import { AwsRedshiftIcon } from './aws-redshift-icon'
 import { AzureSynapseIcon } from './azure-synapse-icon'
@@ -48,7 +48,3 @@ export const KIND: Record<string, { icon: Mark; label: string }> = {
   TABLE_PATTERN: { icon: Asterisk, label: 'Pattern' },
   CONNECTOR: { icon: Plug, label: 'Connector' },
 }
-
-/** Two ways out of OWOX that are not data destinations, but read as one on this canvas. */
-export const AI_MARK: Mark = Sparkles
-export const API_MARK: Mark = KeyRound
