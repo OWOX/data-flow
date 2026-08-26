@@ -70,7 +70,12 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
 }
 :root.dark .dm-band-icon { background: color-mix(in oklab, white 8%, transparent); }
 .dm-band-title { margin: 0; font-size: 0.9375rem; font-weight: 500; line-height: 1; }
-.dm-band-count { font-size: 0.75rem; padding: 0.0625rem 0.4375rem; }
+/* Same fill as the title's icon tile beside it, so the two read as one header. */
+.dm-band-count {
+  font-size: 0.75rem; padding: 0.0625rem 0.4375rem;
+  background: color-mix(in oklab, var(--border) 75%, transparent);
+}
+:root.dark .dm-band-count { background: color-mix(in oklab, white 8%, transparent); }
 .dm-band-tools { display: flex; gap: 0.5rem; margin-left: auto; }
 /* Wider than the 0.75rem it was: the lines between cards need room to be followed. */
 .dm-band-grid { display: grid; gap: 0.85rem; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); }
