@@ -3,7 +3,6 @@ import {
   ArchiveRestore,
   Bot,
   Box,
-  BrainCircuit,
   ChevronDown,
   CircleAlert,
   CircleCheck,
@@ -14,24 +13,14 @@ import {
   FileText,
   Info,
   KeyRound,
-  Layers,
   Plug,
   Plus,
+  Search,
   Sparkles,
   Waypoints,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  destId,
-  loadModel,
-  martId,
-  reportId,
-  sourceId,
-  typeId,
-  type Mart,
-  type Model,
-  type QualityState,
-} from './owox'
+import { destId, loadModel, martId, reportId, sourceId, type Mart, type Model, type QualityState } from './owox'
 import { DESTINATION, KIND, STORAGE, type Mark } from './icons'
 import { useWires } from './wires'
 
@@ -51,27 +40,6 @@ const QUALITY: Record<QualityState, { tone: 'ok' | 'warn' | 'bad' | 'idle'; labe
   ALL_DISABLED: { tone: 'idle', label: 'Data quality: all checks disabled' },
 }
 
-/** Ways out of OWOX that no endpoint lists: both live on the project's API keys page. */
-const WAYS_OUT = [
-  { icon: BrainCircuit, title: 'AI', note: "Ask this project's data questions" },
-  { icon: KeyRound, title: 'API', note: 'Read the marts over HTTP' },
-]
-
-const ASSISTANTS = [
-  {
-    icon: Sparkles,
-    title: 'Claude',
-    note: 'OWOX Data Marts connector',
-    to: 'https://claude.ai/directory/owox-data-marts',
-  },
-  {
-    icon: Bot,
-    title: 'ChatGPT',
-    note: 'OWOX Data Marts app',
-    to: 'https://chatgpt.com/plugins/plugin_asdk_app_6a3e81be8f8481918e1e2cd1d7ea09c4',
-  },
-]
-
 /**
  * The attribute filter, in facets.
  *
@@ -87,6 +55,25 @@ const FLAGS: Array<{ key: string; facet: string; label: string; test: (mart: Mar
   { key: 'no-reports', facet: 'reports', label: 'Without reports', test: m => m.reports === 0 },
   { key: 'errors', facet: 'errors', label: 'With errors', test: m => m.errors },
   { key: 'no-errors', facet: 'errors', label: 'Without errors', test: m => !m.errors },
+]
+
+/** Ways out of OWOX that no endpoint lists. Selectable like any card; only the link opens. */
+const EXITS: Array<{ id: string; icon: Mark; title: string; note: string; to: string }> = [
+  {
+    id: 'x-claude',
+    icon: Sparkles,
+    title: 'Claude',
+    note: 'OWOX Data Marts connector',
+    to: 'https://claude.ai/directory/owox-data-marts',
+  },
+  {
+    id: 'x-chatgpt',
+    icon: Bot,
+    title: 'ChatGPT',
+    note: 'OWOX Data Marts app',
+    to: 'https://chatgpt.com/plugins/plugin_asdk_app_6a3e81be8f8481918e1e2cd1d7ea09c4',
+  },
+  { id: 'x-api', icon: KeyRound, title: 'API', note: 'Read the marts over HTTP', to: '' },
 ]
 
 export default function App() {
@@ -136,25 +123,47 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
   const [limit, setLimit] = useState(PAGE)
   const [storages, setStorages] = useState<string[]>([])
   const [flags, setFlags] = useState<string[]>([])
-  const onPin = useCallback((id: string | null) => setPinned(id), [])
+  const [martSearch, setMartSearch] = useState('')
+  const [types, setTypes] = useState<string[]>([])
+  const [reportSearch, setReportSearch] = useState('')
+  const [reportLimit, setReportLimit] = useState(PAGE)
+  // Selecting something re-aims the Reports block, so its page count starts over with it.
+  const onPin = useCallback((id: string | null) => {
+    setPinned(id)
+    setReportLimit(PAGE)
+  }, [])
 
   const marts = useMemo(() => {
     const chosen = FLAGS.filter(flag => flags.includes(flag.key))
     const facets = [...new Set(chosen.map(flag => flag.facet))]
+    const needle = martSearch.trim().toLowerCase()
     return model.marts.filter(
       mart =>
         (storages.length === 0 || storages.includes(mart.storage)) &&
+        (needle === '' || mart.title.toLowerCase().includes(needle)) &&
         facets.every(facet => chosen.some(flag => flag.facet === facet && flag.test(mart))),
     )
-  }, [model.marts, storages, flags])
+  }, [model.marts, storages, flags, martSearch])
 
-  const shown = marts.slice(0, limit)
-  const hidden = marts.length - shown.length
+  const destinations =
+    types.length === 0 ? model.destinations : model.destinations.filter(d => types.includes(d.type))
 
-  // Selecting a data mart turns the Reports block into that mart's reports.
-  const selected = pinned?.startsWith('dm-') ? pinned.slice(3) : null
-  const reports = selected ? model.reports.filter(report => report.martId === selected) : model.reports
-  const selectedTitle = model.marts.find(mart => mart.id === selected)?.title
+  // Selecting a data mart or a destination turns the Reports block into that card's reports.
+  const selectedMart = pinned?.startsWith('dm-') ? pinned.slice(3) : null
+  const selectedDestination = pinned?.startsWith('dd-') ? pinned.slice(3) : null
+  const selectedTitle = selectedMart
+    ? model.marts.find(mart => mart.id === selectedMart)?.title
+    : model.destinations.find(destination => destination.id === selectedDestination)?.title
+
+  const reports = useMemo(() => {
+    const needle = reportSearch.trim().toLowerCase()
+    return model.reports.filter(
+      report =>
+        (!selectedMart || report.martId === selectedMart) &&
+        (!selectedDestination || report.destinationId === selectedDestination) &&
+        (needle === '' || report.title.toLowerCase().includes(needle)),
+    )
+  }, [model.reports, selectedMart, selectedDestination, reportSearch])
 
   // `<details name>` closes the other menu when one opens; nothing but this closes the last one
   // when the pointer goes elsewhere.
@@ -168,10 +177,13 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
     return () => document.removeEventListener('click', close)
   }, [])
 
-  const revision = `${limit}|${storages}|${flags}|${selected}`
+  const shown = marts.slice(0, limit)
+  const shownReports = reports.slice(0, reportLimit)
+  const revision = `${limit}|${storages}|${flags}|${martSearch}|${types}|${reportSearch}|${reportLimit}|${pinned}`
   useWires(canvas, model.wires, model.chains, revision, pinned, onPin)
 
   const createMart = `/ui/${ctx.projectId}/data-marts/create`
+  const apiKeys = `/ui/${ctx.projectId}/me/api-keys`
 
   return (
     <div id="canvas" ref={canvas} className="dm-canvas">
@@ -200,6 +212,7 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
         {model.sources.map(source => (
           <NodeCard
             key={source.key}
+            ctx={ctx}
             id={sourceId(source.key)}
             mark={<Logo name={source.name} logo={source.logo} />}
             title={source.name}
@@ -216,6 +229,7 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
         hint={`Published before draft, connector-based before the rest, then ordered by how much depends on them: joins in, joins out, reports. ${PAGE} at a time. Quality and freshness sit along the bottom of each card.`}
         toolbar={
           <>
+            <SearchBox value={martSearch} onChange={setMartSearch} label="Search data marts" />
             <MultiSelect
               label="Storage"
               options={model.storages.map(storage => ({
@@ -243,15 +257,7 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
         }
         footer={
           <div className="dm-band-grid dm-band-foot">
-            {hidden > 0 && (
-              <button type="button" className="dm-node dm-add" onClick={() => setLimit(limit + PAGE)}>
-                <ChevronDown size={18} />
-                <span>Load {Math.min(PAGE, hidden)} more</span>
-                <span className="dm-muted">
-                  {shown.length} of {marts.length}
-                </span>
-              </button>
-            )}
+            <MoreCard shown={shown.length} total={marts.length} onMore={() => setLimit(limit + PAGE)} />
             <AddCard ctx={ctx} to={createMart} label="New data mart" />
           </div>
         }
@@ -263,47 +269,52 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
       </Block>
 
       <Block
-        icon={Layers}
-        title="Destination Types"
-        count={model.destinationTypes.length}
-        hint="The kinds of destination this project publishes to. Only types with a destination behind them appear."
-      >
-        {model.destinationTypes.map(type => (
-          <NodeCard
-            key={type.type}
-            id={typeId(type.type)}
-            mark={<Logo icon={DESTINATION[type.type]?.icon ?? ArchiveRestore} />}
-            title={DESTINATION[type.type]?.label ?? type.type}
-            badge={count(type.destinations, 'destination')}
-          />
-        ))}
-        {WAYS_OUT.map(way => (
-          <LinkCard key={way.title} ctx={ctx} to={`/ui/${ctx.projectId}/me/api-keys`} {...way} />
-        ))}
-      </Block>
-
-      <Block
         icon={ArchiveRestore}
         title="Destinations"
-        count={model.destinations.length}
-        hint="The destinations themselves, each wired to its type and badged with the reports that write to it."
+        count={destinations.length}
+        hint="Where the reports go, badged with how many write to each. Claude, ChatGPT and the API are ways out that no endpoint lists — select them, or follow the link in the corner."
+        toolbar={
+          <MultiSelect
+            label="Type"
+            options={model.destinationTypes.map(type => ({
+              value: type.type,
+              label: DESTINATION[type.type]?.label ?? type.type,
+              count: type.destinations,
+              icon: DESTINATION[type.type]?.icon ?? ArchiveRestore,
+            }))}
+            selected={types}
+            onChange={setTypes}
+          />
+        }
         footer={
           <div className="dm-band-grid dm-band-foot">
             <AddCard ctx={ctx} to={`/ui/${ctx.projectId}/data-destinations`} label="New destination" />
           </div>
         }
       >
-        {model.destinations.map(destination => (
+        {destinations.map(destination => (
           <NodeCard
             key={destination.id}
+            ctx={ctx}
             id={destId(destination.id)}
             mark={<Logo icon={DESTINATION[destination.type]?.icon ?? ArchiveRestore} />}
             title={destination.title}
             badge={count(destination.reports, 'report')}
+            link={`/ui/${ctx.projectId}/data-destinations?id=${destination.id}`}
+            linkTitle="Open this destination"
           />
         ))}
-        {ASSISTANTS.map(assistant => (
-          <LinkCard key={assistant.title} ctx={ctx} {...assistant} />
+        {EXITS.map(exit => (
+          <NodeCard
+            key={exit.id}
+            ctx={ctx}
+            id={exit.id}
+            mark={<Logo icon={exit.icon} />}
+            title={exit.title}
+            note={exit.note}
+            link={exit.to || apiKeys}
+            linkTitle={`Open ${exit.title}`}
+          />
         ))}
       </Block>
 
@@ -311,34 +322,54 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
         icon={FileText}
         title={selectedTitle ? `Reports · ${selectedTitle}` : 'Reports'}
         count={reports.length}
-        hint={`The ${PAGE} most recently run reports. Select a data mart above and this block narrows to that mart's reports.`}
-      >
-        {reports.slice(0, PAGE).map(report => (
-          <article
-            key={report.id}
-            id={reportId(report.id)}
-            data-node
-            tabIndex={0}
-            aria-pressed="false"
-            className="dm-node"
-          >
-            <div className="dm-node-head">
-              <span className="dm-node-title" title={report.title}>
-                {report.title}
-              </span>
+        hint={`The ${PAGE} most recently run reports. Select a data mart or a destination above and this block narrows to its reports.`}
+        toolbar={
+          <SearchBox
+            value={reportSearch}
+            onChange={next => {
+              setReportSearch(next)
+              setReportLimit(PAGE)
+            }}
+            label="Search reports"
+          />
+        }
+        footer={
+          reports.length > shownReports.length ? (
+            <div className="dm-band-grid dm-band-foot">
+              <MoreCard
+                shown={shownReports.length}
+                total={reports.length}
+                onMore={() => setReportLimit(reportLimit + PAGE)}
+              />
             </div>
-            <div className="dm-muted dm-node-sub">{report.martTitle ?? 'Unknown data mart'}</div>
+          ) : undefined
+        }
+      >
+        {shownReports.map(report => (
+          <NodeCard
+            key={report.id}
+            ctx={ctx}
+            id={reportId(report.id)}
+            title={report.title}
+            note={report.martTitle ?? 'Unknown data mart'}
+            link={
+              report.martId
+                ? `/ui/${ctx.projectId}/data-marts/${report.martId}/reports?reportId=${report.id}`
+                : undefined
+            }
+            linkTitle="Open this report"
+          >
             <div className="dm-node-foot">
               <span className={`dm-status dm-${runTone(report.lastRunStatus)}`}>
                 {report.lastRunStatus === 'ERROR' ? <CircleAlert size={14} /> : <CircleCheck size={14} />}
               </span>
               <span className="dm-muted dm-run">{report.lastRunAt ? ago(report.lastRunAt) : 'never run'}</span>
             </div>
-          </article>
+          </NodeCard>
         ))}
         {reports.length === 0 && (
           <p className="dm-muted dm-empty">
-            {selectedTitle ? 'This data mart has no reports.' : 'No reports in this project yet.'}
+            {selectedTitle ? 'Nothing here has reports.' : 'No reports in this project yet.'}
           </p>
         )}
       </Block>
@@ -346,19 +377,34 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
   )
 }
 
-/** A card that is one end of a wire: a source, a destination type, a destination. */
+/**
+ * A card that is one end of a wire.
+ *
+ * `link` is the only part of it that is clickable: anywhere else selects the card, because that is
+ * what a card on this canvas is for.
+ */
 function NodeCard({
+  ctx,
   id,
   mark,
   title,
   hint,
   badge,
+  note,
+  link,
+  linkTitle,
+  children,
 }: {
+  ctx: PluginContext
   id: string
-  mark: React.ReactNode
+  mark?: React.ReactNode
   title: string
   hint?: string
-  badge: string
+  badge?: string
+  note?: string
+  link?: string
+  linkTitle?: string
+  children?: React.ReactNode
 }) {
   return (
     <article id={id} data-node tabIndex={0} aria-pressed="false" className="dm-node">
@@ -367,10 +413,19 @@ function NodeCard({
         <span className="dm-node-title" title={hint ?? title}>
           {title}
         </span>
+        {link && (
+          <AppLink ctx={ctx} to={link} title={linkTitle}>
+            <ExternalLink size={14} />
+          </AppLink>
+        )}
       </div>
-      <div className="dm-badges">
-        <span className="dm-badge">{badge}</span>
-      </div>
+      {note && <div className="dm-muted dm-node-sub">{note}</div>}
+      {badge && (
+        <div className="dm-badges">
+          <span className="dm-badge">{badge}</span>
+        </div>
+      )}
+      {children}
     </article>
   )
 }
@@ -403,7 +458,7 @@ function MartCard({ ctx, mart }: { ctx: PluginContext; mart: Mart }) {
         {mart.fields !== undefined && <span className="dm-badge">{mart.fields} fields</span>}
         {mart.outbound > 0 && (
           <span className="dm-badge">
-            <Waypoints size={12} /> {mart.outbound} relationship{mart.outbound === 1 ? '' : 's'}
+            <Waypoints size={12} /> {count(mart.outbound, 'relationship')}
           </span>
         )}
         {mart.draft && <span className="dm-badge dm-badge-draft">draft</span>}
@@ -427,7 +482,7 @@ function MartCard({ ctx, mart }: { ctx: PluginContext; mart: Mart }) {
 function Block({
   icon: Icon,
   title,
-  count,
+  count: total,
   hint,
   toolbar,
   footer,
@@ -448,7 +503,7 @@ function Block({
           <Icon size={18} />
         </span>
         <h2 className="dm-band-title">{title}</h2>
-        {count !== undefined && <span className="dm-muted dm-band-count">{count}</span>}
+        {total !== undefined && <span className="dm-muted dm-band-count">{total}</span>}
         <span className="dm-hint" tabIndex={0} role="note" aria-label={hint}>
           <Info size={14} />
           <span className="dm-hint-body">{hint}</span>
@@ -461,12 +516,27 @@ function Block({
   )
 }
 
+function SearchBox({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
+  return (
+    <label className="dm-search" title={label}>
+      <Search size={14} />
+      <input
+        type="search"
+        value={value}
+        placeholder={label}
+        aria-label={label}
+        onChange={e => onChange(e.target.value)}
+      />
+    </label>
+  )
+}
+
 /**
  * A checkbox menu on a native `<details>` — no library, and `name` makes the browser close the
  * other one when this opens, so only ever one is down at a time.
  *
  * Nothing selected filters nothing, which is the same result as everything selected: both say
- * "All" rather than leaving the reader to work out that an empty menu means no filter.
+ * "All" and draw every row checked, rather than leaving the reader to work that out.
  */
 function MultiSelect({
   label,
@@ -523,9 +593,7 @@ function MultiSelect({
                     e.target.checked
                       ? [...selected, option.value]
                       : // Dropping one out of "all" leaves the others behind, not an empty menu.
-                        (all ? options.map(o => o.value) : selected).filter(
-                          value => value !== option.value,
-                        ),
+                        (all ? options.map(o => o.value) : selected).filter(value => value !== option.value),
                   )
                 }
               />
@@ -545,33 +613,21 @@ function MultiSelect({
   )
 }
 
-/** A card whose whole surface is a link — the API keys page, Claude, ChatGPT. */
-function LinkCard({
-  ctx,
-  icon,
-  title,
-  note,
-  to,
-}: {
-  ctx: PluginContext
-  icon: Mark
-  title: string
-  note: string
-  to: string
-}) {
+/** The rest of a capped list. Never a wire endpoint, so no `data-node`. */
+function MoreCard({ shown, total, onMore }: { shown: number; total: number; onMore: () => void }) {
+  if (shown >= total) return null
   return (
-    <AppLink ctx={ctx} to={to} className="dm-node dm-linkcard">
-      <div className="dm-node-head">
-        <Logo icon={icon} />
-        <span className="dm-node-title">{title}</span>
-        <ExternalLink size={14} className="dm-link" />
-      </div>
-      <div className="dm-muted dm-node-sub">{note}</div>
-    </AppLink>
+    <button type="button" className="dm-node dm-add" onClick={onMore}>
+      <ChevronDown size={18} />
+      <span>Load {Math.min(PAGE, total - shown)} more</span>
+      <span className="dm-muted">
+        {shown} of {total}
+      </span>
+    </button>
   )
 }
 
-/** A card that adds the thing this block holds. Never a wire endpoint, so no `data-node`. */
+/** A card that adds the thing this block holds. Never a wire endpoint either. */
 function AddCard({ ctx, to, label }: { ctx: PluginContext; to: string; label: string }) {
   return (
     <AppLink ctx={ctx} to={to} className="dm-node dm-add" title={label}>

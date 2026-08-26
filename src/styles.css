@@ -46,6 +46,8 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
 #wires .report { stroke: var(--primary); stroke-width: 1.5; opacity: 0.45; }
 #wires .type { stroke: var(--primary); stroke-width: 1; opacity: 0.3; }
 #wires .run { stroke: var(--muted-foreground); stroke-width: 1; opacity: 0.3; }
+/* A route nothing has ever run: kept off the canvas until its card is selected. */
+#wires .dormant { stroke: var(--primary); stroke-width: 1.5; stroke-dasharray: 2 4; opacity: 0; }
 
 /* The block chrome OWOX itself uses for Storage / Input Source / Output schema: a light panel with
    a rounded icon tile beside the title, no shadow, a hairline under it. */
@@ -94,8 +96,8 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
 .dm-filter > summary {
   display: flex; align-items: center; gap: 0.375rem;
   border: 1px solid var(--border); border-radius: 0.375rem;
-  padding: 0.25rem 0.5rem; background: var(--card);
-  font-size: 0.75rem; cursor: pointer; list-style: none; user-select: none;
+  height: 1.75rem; padding: 0 0.5rem; background: var(--card);
+  font-size: 0.8125rem; cursor: pointer; list-style: none; user-select: none;
 }
 .dm-filter > summary::-webkit-details-marker { display: none; }
 .dm-filter[open] > summary { border-color: var(--muted-foreground); }
@@ -116,7 +118,7 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
   font-size: 0.8125rem; cursor: pointer;
 }
 .dm-filter-menu label:hover { background: var(--muted); }
-.dm-filter-menu label.dm-on { background: color-mix(in oklab, var(--primary) 10%, transparent); color: var(--foreground); font-weight: 500; }
+.dm-filter-menu label.dm-on { color: var(--foreground); font-weight: 500; }
 .dm-filter-menu label svg { color: var(--muted-foreground); flex-shrink: 0; }
 .dm-filter-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dm-filter-every { border-bottom: 1px solid var(--border); border-radius: 0; margin-bottom: 0.25rem; padding-bottom: 0.375rem; font-weight: 500; }
@@ -127,6 +129,20 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
   font: inherit; font-size: 0.75rem; cursor: pointer;
 }
 .dm-filter-clear:hover { color: var(--foreground); }
+
+/* A search box that matches the filter controls beside it. */
+.dm-search {
+  display: flex; align-items: center; gap: 0.375rem;
+  height: 1.75rem; padding: 0 0.5rem;
+  border: 1px solid var(--border); border-radius: 0.375rem; background: var(--card);
+  color: var(--muted-foreground);
+}
+.dm-search:focus-within { border-color: var(--muted-foreground); }
+.dm-search input {
+  width: 9rem; min-width: 0; border: 0; background: none; outline: none;
+  color: var(--foreground); font: inherit; font-size: 0.8125rem;
+}
+.dm-search input::-webkit-search-cancel-button { cursor: pointer; }
 
 /* --- cards -------------------------------------------------------------- */
 .dm-node {
@@ -185,6 +201,9 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
    back, and its own lines come forward. Clicking pins that state so the pointer can leave. */
 .dm-canvas.focused .dm-node { opacity: 0.25; }
 .dm-canvas.focused .dm-node.lit { opacity: 1; }
+/* Adding a card and loading the rest stay available whatever is selected. */
+.dm-add { z-index: 3; }
+.dm-canvas.focused .dm-add { opacity: 0.9; }
 .dm-canvas.focused #wires path { opacity: 0.06; }
 .dm-canvas.focused #wires path.lit { opacity: 1; stroke-width: 2; }
 .dm-node[aria-pressed='true'] { box-shadow: 0 0 0 2px var(--primary); }

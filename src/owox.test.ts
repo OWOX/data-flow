@@ -76,11 +76,11 @@ test('the whole graph: cards, order, badges and lines', async () => {
     { from: 'src-facebookads', to: 'dm-m1', kind: 'source' },
     { from: 'src-facebookads', to: 'dm-m2', kind: 'source' },
     { from: 'dm-m3', to: 'dm-m1', kind: 'relationship' },
-    { from: 'dm-m1', to: 'dt-GOOGLE_SHEETS', kind: 'report' },
-    { from: 'dm-m3', to: 'dt-LOOKER_STUDIO', kind: 'report' },
-    { from: 'dd-d1', to: 'dt-GOOGLE_SHEETS', kind: 'type' },
-    { from: 'dd-d2', to: 'dt-GOOGLE_SHEETS', kind: 'type' },
-    { from: 'dd-d3', to: 'dt-LOOKER_STUDIO', kind: 'type' },
+    { from: 'dm-m1', to: 'dd-d1', kind: 'report' },
+    { from: 'dm-m1', to: 'dd-d2', kind: 'report' },
+    { from: 'dm-m3', to: 'dd-d3', kind: 'report' },
+    // m2's only report has never run: the route is drawn, but stays hidden until it is selected.
+    { from: 'dm-m2', to: 'dd-d3', kind: 'dormant' },
     { from: 'dd-d1', to: 'rp-r1', kind: 'run' },
     { from: 'dd-d2', to: 'rp-r2', kind: 'run' },
     { from: 'dd-d3', to: 'rp-r3', kind: 'run' },
@@ -91,7 +91,7 @@ test('the whole graph: cards, order, badges and lines', async () => {
   // A report reaches back to the one data mart that feeds it, and on to its source.
   assert.deepEqual(
     model.chains.filter(chain => chain.includes('rp-r1')),
-    [['src-facebookads', 'dm-m1', 'dt-GOOGLE_SHEETS', 'dd-d1', 'rp-r1']],
+    [['src-facebookads', 'dm-m1', 'dd-d1', 'rp-r1']],
   )
 })
 
@@ -121,6 +121,6 @@ test('an endpoint the member cannot read costs only its own detail', async () =>
   assert.equal(model.reports.length, 0)
   // No /api/connectors: the raw connector name still names the source.
   assert.deepEqual(model.sources.map(s => s.name), ['FacebookAds'])
-  // Source lines and the destination-to-type lines survive; joins and reports do not.
-  assert.deepEqual(model.wires.map(w => w.kind), ['source', 'source', 'type', 'type', 'type'])
+  // Only the source lines survive: joins, routes and runs all come from endpoints that failed.
+  assert.deepEqual(model.wires.map(w => w.kind), ['source', 'source'])
 })

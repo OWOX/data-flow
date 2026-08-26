@@ -51,7 +51,12 @@ export type Report = {
   lastRunStatus?: string
 }
 
-export type Wire = { from: string; to: string; kind: 'source' | 'relationship' | 'report' | 'type' | 'run' }
+export type Wire = {
+  from: string
+  to: string
+  /** `dormant` is a route that exists but has never carried data: drawn only when selected. */
+  kind: 'source' | 'relationship' | 'report' | 'dormant' | 'run'
+}
 
 export type Storage = { title: string; type: string; marts: number }
 
@@ -64,7 +69,7 @@ export type Model = {
   storages: Storage[]
   wires: Wire[]
   /**
-   * Source → data mart → destination type → destination → report, one chain per report.
+   * Source → data mart → destination → report, one chain per report.
    *
    * Selecting a card lights every chain it appears on, which is how a report reaches back up to
    * the one data mart that feeds it instead of every mart that happens to share its destination
@@ -76,7 +81,6 @@ export type Model = {
 export const sourceId = (key: string) => `src-${key.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`
 export const martId = (id: string) => `dm-${id}`
 export const destId = (id: string) => `dd-${id}`
-export const typeId = (type: string) => `dt-${type}`
 export const reportId = (id: string) => `rp-${id}`
 
 /** An endpoint outside the typed client, or one this member may not read, must not cost the page. */
@@ -214,21 +218,21 @@ export async function loadModel(ctx: PluginContext): Promise<Model> {
   for (const edge of edges) {
     wires.push({ from: martId(edge.from), to: martId(edge.to), kind: 'relationship' })
   }
-  // Several reports commonly run one mart into one destination type: one line, not one per report.
+  // Several reports commonly run one mart into one destination: one line, not one per report.
   //
-  // A report that has never run is not a route the data takes yet — a Looker Studio destination
-  // nobody has activated, a Google Sheets report created and left alone — so it draws no line.
-  const seen = new Set<string>()
+  // A route none of them has ever run is drawn `dormant` — a Looker Studio destination nobody
+  // activated, a sheet report created and left alone. It stays invisible until something on it is
+  // selected, so the canvas shows the data's actual routes without losing the intended ones.
+  const routes = new Map<string, boolean>()
   for (const report of reports) {
-    const type = report.destinationId ? destinationBy.get(report.destinationId)?.type : undefined
-    if (!report.martId || !type || !known.has(report.martId) || !report.lastRunAt) continue
-    const key = `${report.martId}>${type}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    wires.push({ from: martId(report.martId), to: typeId(type), kind: 'report' })
+    if (!report.martId || !report.destinationId || !known.has(report.martId)) continue
+    if (!destinationBy.has(report.destinationId)) continue
+    const key = `${report.martId}>${report.destinationId}`
+    routes.set(key, Boolean(routes.get(key)) || Boolean(report.lastRunAt))
   }
-  for (const destination of destinations) {
-    wires.push({ from: destId(destination.id), to: typeId(destination.type), kind: 'type' })
+  for (const [key, live] of routes) {
+    const [from, to] = key.split('>')
+    wires.push({ from: martId(from), to: destId(to), kind: live ? 'report' : 'dormant' })
   }
   for (const report of reports) {
     if (report.destinationId && destinationBy.has(report.destinationId)) {
@@ -246,7 +250,6 @@ export async function loadModel(ctx: PluginContext): Promise<Model> {
       [
         mart?.source && sources.has(mart.source) ? sourceId(mart.source) : undefined,
         mart ? martId(mart.id) : undefined,
-        typeId(destination.type),
         destId(destination.id),
         reportId(report.id),
       ].filter((id): id is string => Boolean(id)),
