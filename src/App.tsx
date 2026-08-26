@@ -4,93 +4,37 @@ import {
   Bot,
   Box,
   CalendarClock,
-  ChevronDown,
   Columns3,
-  CircleCheck,
-  CircleDashed,
   Database,
-  ExternalLink,
   FileText,
   Filter,
-  History,
-  Info,
   KeyRound,
-  Loader2,
-  LoaderCircle,
-  Plug,
-  Plus,
   Layers,
-  Search,
-  Shield,
-  ShieldAlert,
-  ShieldBan,
-  ShieldCheck,
-  ShieldMinus,
-  ShieldOff,
-  ShieldX,
+  Plug,
   Sigma,
   Sparkles,
-  Waypoints,
-  XCircle,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { AddCard, Logo, MartCard, MoreCard, NodeCard, RunIcon } from './cards'
+import { ago, count, reportName, runTone, scheduleLabel } from './format'
+import { Block, MultiSelect, SearchBox } from './controls'
+import { DESTINATION, STORAGE, type Mark } from './icons'
 import {
   destId,
   loadModel,
-  martId,
   reportId,
   sourceId,
+  type Destination,
   type Mart,
   type Model,
-  type QualitySummary,
   type Report,
+  type Source,
 } from './owox'
-import { DESTINATION, KIND, STORAGE, type Mark } from './icons'
+import { useReorder, type Cards } from './reorder'
 import { useWires } from './wires'
 
 /** How many cards are on screen before the rest wait behind the block's "load more". */
 const PAGE = 25
-
-/**
- * The data quality status icon, straight out of the host's `getDataQualityStatusVisual` — same
- * shields, same labels, same tone per state, so a mart reads the same here as on its own canvas.
- */
-function qualityVisual(summary?: QualitySummary) {
-  if (!summary) return { icon: Shield, tone: 'idle', label: 'Data quality: unknown', spin: false }
-  const severity =
-    (summary.errorFindings ?? 0) > 0 || summary.highestSeverity === 'error'
-      ? 'bad'
-      : (summary.warningFindings ?? 0) > 0 || summary.highestSeverity === 'warning'
-        ? 'warn'
-        : (summary.noticeFindings ?? 0) > 0 || summary.highestSeverity === 'notice'
-          ? 'notice'
-          : null
-
-  const visual = (icon: Mark, tone: string, label: string, spin = false) => ({ icon, tone, label, spin })
-
-  if (summary.state === 'CANCELLED') return visual(ShieldBan, 'idle', 'Cancelled')
-  if ((summary.totalChecks ?? 0) > 0 && summary.notApplicableChecks === summary.totalChecks) {
-    return visual(ShieldMinus, 'idle', 'No applicable checks')
-  }
-  switch (summary.state) {
-    case 'NEVER_RUN':
-      return visual(Shield, 'idle', 'Never run')
-    case 'ALL_DISABLED':
-      return visual(ShieldOff, 'idle', 'All checks disabled')
-    case 'QUEUED':
-      return visual(LoaderCircle, 'progress', 'Queued', true)
-    case 'RUNNING':
-      return visual(LoaderCircle, 'progress', 'Running', true)
-    case 'PASSED':
-      return visual(ShieldCheck, 'ok', 'Passed')
-    case 'EXECUTION_FAILED':
-      return visual(ShieldX, 'bad', 'Run failed')
-    case 'RESTRICTED':
-      return visual(ShieldBan, 'warn', 'Restricted')
-    case 'ISSUES':
-      return visual(ShieldAlert, severity ?? 'warn', 'Issues found')
-  }
-}
 
 /**
  * The attribute filter, in facets.
@@ -142,6 +86,37 @@ const EXIT_TYPES = [
 ].map(row => ({ ...row, destinations: EXITS.filter(exit => exit.type === row.type).length }))
 
 const FACETS = [...new Set(FLAGS.map(flag => flag.facet))]
+
+/** Everything the four blocks read. Canvas works it out; each block takes the whole thing. */
+type Page = {
+  ctx: PluginContext
+  model: Model
+  createMart: string
+  apiKeys: string
+  sourceCards: Cards<Source>
+  marts: Mart[]
+  martCards: Cards<Mart>
+  martSearch: string
+  setMartSearch: (value: string) => void
+  storages: string[]
+  setStorages: (value: string[]) => void
+  flags: string[]
+  setFlags: (value: string[]) => void
+  limit: number
+  setLimit: (value: number) => void
+  destinations: Destination[]
+  destinationCards: Cards<Destination>
+  exitCards: Cards<(typeof EXITS)[number]>
+  types: string[]
+  setTypes: (value: string[]) => void
+  reports: Report[]
+  reportCards: Cards<Report>
+  selectedTitle?: string
+  reportSearch: string
+  setReportSearch: (value: string) => void
+  reportLimit: number
+  setReportLimit: (value: number) => void
+}
 
 export default function App() {
   const [ctx, setCtx] = useState<PluginContext | null>(null)
@@ -301,11 +276,42 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
   const exitCards = useReorder(EXITS.filter(exit => types.includes(exit.type)), exit => exit.id)
   const reportCards = useReorder(shownReports, report => report.id)
 
-  const revision = `${limit}|${storages}|${flags}|${martSearch}|${types}|${reportSearch}|${reportLimit}|${pinned}|${scope}|${sourceCards.order}|${martCards.order}|${destinationCards.order}|${reportCards.order}`
+  // Filters, paging, searching and dragging all reach the lines the same way: by changing which
+  // cards are on the page, and in what order.
+  const revision = [sourceCards, martCards, destinationCards, exitCards, reportCards]
+    .map(block => block.key)
+    .join('|')
   useWires(canvas, model.wires, model.chains, revision, pinned, onPin)
 
-  const createMart = `/ui/${ctx.projectId}/data-marts/create`
-  const apiKeys = `/ui/${ctx.projectId}/me/api-keys`
+  const page: Page = {
+    ctx,
+    model,
+    createMart: `/ui/${ctx.projectId}/data-marts/create`,
+    apiKeys: `/ui/${ctx.projectId}/me/api-keys`,
+    sourceCards,
+    marts,
+    martCards,
+    martSearch,
+    setMartSearch,
+    storages,
+    setStorages,
+    flags,
+    setFlags,
+    limit,
+    setLimit,
+    destinations,
+    destinationCards,
+    exitCards,
+    types,
+    setTypes,
+    reports,
+    reportCards,
+    selectedTitle,
+    reportSearch,
+    setReportSearch,
+    reportLimit,
+    setReportLimit,
+  }
 
   return (
     <div id="canvas" ref={canvas} className="dm-canvas">
@@ -325,6 +331,19 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
         </defs>
       </svg>
 
+      <SourcesBlock {...page} />
+
+      <DataMartsBlock {...page} />
+
+      <DestinationsBlock {...page} />
+
+      <ReportsBlock {...page} />
+    </div>
+  )
+}
+
+function SourcesBlock({ ctx, model, sourceCards }: Page) {
+  return (
       <Block
         icon={Plug}
         title="Sources"
@@ -344,7 +363,11 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
           />
         ))}
       </Block>
+  )
+}
 
+function DataMartsBlock({ ctx, model, marts, martCards, martSearch, setMartSearch, storages, setStorages, flags, setFlags, limit, setLimit, createMart }: Page) {
+  return (
       <Block
         icon={Box}
         title="Data Marts"
@@ -383,10 +406,19 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
         {martCards.items.map(mart => (
           <MartCard key={mart.id} ctx={ctx} mart={mart} drag={martCards.dragProps(mart)} />
         ))}
-        <MoreCard shown={Math.min(limit, marts.length)} total={marts.length} onMore={() => setLimit(limit + PAGE)} />
+        <MoreCard
+          shown={Math.min(limit, marts.length)}
+          total={marts.length}
+          page={PAGE}
+          onMore={() => setLimit(limit + PAGE)}
+        />
         <AddCard ctx={ctx} to={createMart} label="New data mart" />
       </Block>
+  )
+}
 
+function DestinationsBlock({ ctx, model, destinations, destinationCards, exitCards, types, setTypes, apiKeys }: Page) {
+  return (
       <Block
         icon={ArchiveRestore}
         title="Destinations"
@@ -442,7 +474,11 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
         ))}
         <AddCard ctx={ctx} to={`/ui/${ctx.projectId}/data-destinations`} label="New destination" />
       </Block>
+  )
+}
 
+function ReportsBlock({ ctx, reports, reportCards, selectedTitle, reportSearch, setReportSearch, reportLimit, setReportLimit }: Page) {
+  return (
       <Block
         icon={FileText}
         title={selectedTitle ? `Reports · ${selectedTitle}` : 'Reports'}
@@ -516,6 +552,7 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
         <MoreCard
           shown={Math.min(reportLimit, reports.length)}
           total={reports.length}
+          page={PAGE}
           onMore={() => setReportLimit(reportLimit + PAGE)}
         />
         {reports.length === 0 && (
@@ -524,495 +561,5 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
           </p>
         )}
       </Block>
-    </div>
   )
-}
-
-type DragProps = {
-  draggable: true
-  className?: string
-  onDragStart: (e: React.DragEvent) => void
-  onDragOver: (e: React.DragEvent) => void
-  onDragEnd: () => void
-  onDrop: (e: React.DragEvent) => void
-}
-
-/**
- * Cards a reader can put in their own order, within their own block.
- *
- * The order lives for the session only: the plugin declares no collections and the sandbox has no
- * storage, so there is nowhere to keep it. Until the first drop a block keeps the order it was
- * given; after that, cards it gains later — a "load more", a widened filter — fall in at the end
- * rather than landing in the middle of someone's arrangement.
- */
-function useReorder<T>(items: T[], idOf: (item: T) => string) {
-  const [order, setOrder] = useState<string[]>([])
-  const [drop, setDrop] = useState<{ id: string; after: boolean } | null>(null)
-  const dragged = useRef<string | null>(null)
-
-  const ordered = useMemo(() => {
-    if (order.length === 0) return items
-    const rank = new Map(order.map((id, i) => [id, i]))
-    return [...items].sort((a, b) => (rank.get(idOf(a)) ?? Infinity) - (rank.get(idOf(b)) ?? Infinity))
-  }, [items, order, idOf])
-
-  const side = (e: React.DragEvent) => {
-    const box = e.currentTarget.getBoundingClientRect()
-    return e.clientX > box.left + box.width / 2
-  }
-
-  const move = (from: string, to: string, after: boolean) => {
-    if (from === to) return
-    setOrder(previous => {
-      const ids = previous.length > 0 ? [...previous] : ordered.map(idOf)
-      const rest = ids.filter(id => id !== from)
-      const at = rest.indexOf(to)
-      if (at < 0) return previous
-      rest.splice(after ? at + 1 : at, 0, from)
-      return rest
-    })
-  }
-
-  const dragProps = (item: T): DragProps => {
-    const id = idOf(item)
-    const marker =
-      dragged.current === id
-        ? 'dm-dragging'
-        : drop?.id === id
-          ? drop.after
-            ? 'dm-drop-after'
-            : 'dm-drop-before'
-          : undefined
-    return {
-      draggable: true,
-      className: marker,
-      onDragStart: e => {
-        dragged.current = id
-        e.dataTransfer.effectAllowed = 'move'
-        // Firefox starts no drag at all unless the transfer carries something.
-        e.dataTransfer.setData('text/plain', id)
-      },
-      onDragOver: e => {
-        if (!dragged.current || dragged.current === id) return
-        e.preventDefault()
-        e.dataTransfer.dropEffect = 'move'
-        setDrop({ id, after: side(e) })
-      },
-      onDragEnd: () => {
-        dragged.current = null
-        setDrop(null)
-      },
-      onDrop: e => {
-        e.preventDefault()
-        if (dragged.current) move(dragged.current, id, side(e))
-        dragged.current = null
-        setDrop(null)
-      },
-    }
-  }
-
-  return { items: ordered, dragProps, order }
-}
-
-/**
- * A card that is one end of a wire.
- *
- * `link` is the only part of it that is clickable: anywhere else selects the card, because that is
- * what a card on this canvas is for.
- */
-function NodeCard({
-  ctx,
-  id,
-  mark,
-  title,
-  hint,
-  badge,
-  note,
-  link,
-  linkTitle,
-  drag,
-  children,
-}: {
-  ctx: PluginContext
-  id: string
-  drag?: DragProps
-  mark?: React.ReactNode
-  title: string
-  hint?: string
-  badge?: string
-  note?: string
-  link?: string
-  linkTitle?: string
-  children?: React.ReactNode
-}) {
-  return (
-    <article
-      id={id}
-      data-node
-      tabIndex={0}
-      aria-pressed="false"
-      {...drag}
-      className={`dm-node${drag?.className ? ` ${drag.className}` : ''}`}
-    >
-      <div className="dm-node-head">
-        {mark}
-        <span className="dm-node-title" title={hint ?? title}>
-          {title}
-        </span>
-        {link && (
-          <AppLink ctx={ctx} to={link} title={linkTitle}>
-            <ExternalLink size={14} />
-          </AppLink>
-        )}
-      </div>
-      {note && <div className="dm-muted dm-node-sub">{note}</div>}
-      {badge && (
-        <div className="dm-badges">
-          <span className="dm-badge">{badge}</span>
-        </div>
-      )}
-      {children}
-    </article>
-  )
-}
-
-const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`
-
-function MartCard({ ctx, mart, drag }: { ctx: PluginContext; mart: Mart; drag?: DragProps }) {
-  const kind = mart.kind ? KIND[mart.kind] : undefined
-  const KindIcon = kind?.icon
-  const quality = qualityVisual(mart.quality)
-  const QualityIcon = quality.icon
-
-  return (
-    <article
-      id={martId(mart.id)}
-      data-node
-      tabIndex={0}
-      aria-pressed="false"
-      {...drag}
-      className={`dm-node${drag?.className ? ` ${drag.className}` : ''}`}
-    >
-      <div className="dm-node-head">
-        <span className="dm-node-title" title={mart.title}>
-          {mart.title}
-        </span>
-        <AppLink ctx={ctx} to={`/ui/${ctx.projectId}/data-marts/${mart.id}`} title="Open this data mart">
-          <ExternalLink size={14} />
-        </AppLink>
-      </div>
-      <div className="dm-badges">
-        {kind && (
-          <span className="dm-badge">
-            {KindIcon && <KindIcon size={12} />} {kind.label}
-          </span>
-        )}
-        {mart.fields !== undefined && <span className="dm-badge">{mart.fields} fields</span>}
-        {mart.triggers > 0 && (
-          <span className="dm-badge" title={count(mart.triggers, 'trigger')}>
-            <CalendarClock size={12} /> {mart.triggers}
-          </span>
-        )}
-        {mart.outbound > 0 && (
-          <span className="dm-badge">
-            <Waypoints size={12} /> {count(mart.outbound, 'relationship')}
-          </span>
-        )}
-        {mart.draft && <span className="dm-badge dm-badge-draft">draft</span>}
-      </div>
-      <div className="dm-node-foot">
-        <span className={`dm-status dm-${quality.tone}`} title={`Data quality: ${quality.label}`}>
-          <QualityIcon size={14} className={quality.spin ? 'dm-spin' : undefined} />
-        </span>
-        <span className={`dm-status dm-${freshnessTone(mart)}`} title={freshnessLabel(mart)}>
-          <History size={14} />
-        </span>
-      </div>
-    </article>
-  )
-}
-
-/**
- * One block of the canvas, chromed like the panels inside OWOX itself: a light card with an icon
- * tile, its title, and an ⓘ carrying the description that used to sit under it.
- */
-function Block({
-  icon: Icon,
-  title,
-  count: total,
-  hint,
-  toolbar,
-  children,
-}: {
-  icon: Mark
-  title: string
-  count?: number
-  hint: string
-  toolbar?: React.ReactNode
-  children: React.ReactNode
-}) {
-  return (
-    <section className="dm-band">
-      <header className="dm-band-head">
-        <span className="dm-band-icon">
-          <Icon size={18} />
-        </span>
-        <h2 className="dm-band-title">{title}</h2>
-        {total !== undefined && <span className="dm-muted dm-band-count">{total}</span>}
-        <span className="dm-hint" tabIndex={0} role="note" aria-label={hint}>
-          <Info size={14} />
-          <span className="dm-hint-body">{hint}</span>
-        </span>
-        {toolbar && <div className="dm-band-tools">{toolbar}</div>}
-      </header>
-      <div className="dm-band-grid">{children}</div>
-    </section>
-  )
-}
-
-function SearchBox({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
-  return (
-    <label className="dm-search" title={label}>
-      <Search size={14} />
-      <input
-        type="search"
-        value={value}
-        placeholder={label}
-        aria-label={label}
-        onChange={e => onChange(e.target.value)}
-      />
-    </label>
-  )
-}
-
-/**
- * A checkbox menu on a native `<details>` — no library, and `name` makes the browser close the
- * other one when this opens, so only ever one is down at a time.
- *
- * Every row starts ticked, so "Select all" is a real toggle: unticking it empties the menu and the
- * block goes empty with it, which is what asking for none of them means.
- */
-function MultiSelect({
-  label,
-  options,
-  selected,
-  onChange,
-  emptyMeans = 'none',
-}: {
-  label: string
-  options: Array<{ value: string; label: string; group?: string; count?: number; icon?: Mark }>
-  selected: string[]
-  onChange: (next: string[]) => void
-  /** What an empty menu asks for: nothing at all, or nothing in particular. */
-  emptyMeans?: 'none' | 'all'
-}) {
-  if (options.length === 0) return null
-  const all = selected.length === options.length
-  const groupOf = (value: string) => options.find(option => option.value === value)?.group
-
-  // "only" narrows within a facet and leaves the others alone; in a menu with no facets, that is
-  // the whole menu.
-  const only = (value: string) =>
-    onChange([...selected.filter(other => groupOf(other) !== groupOf(value)), value])
-
-  // Each facet is labelled once, above its first option.
-  const headed = new Set<string>()
-  const rows = options.map(option => {
-    const heading = option.group && !headed.has(option.group) ? option.group : null
-    if (option.group) headed.add(option.group)
-    return { option, heading }
-  })
-
-  return (
-    <details className="dm-filter" name="dm-filter">
-      <summary>
-        {label}
-        <span className={all || selected.length === 0 ? 'dm-filter-all' : 'dm-filter-count'}>
-          {all || (selected.length === 0 && emptyMeans === 'all') ? 'All' : selected.length === 0 ? 'None' : selected.length}
-        </span>
-        <ChevronDown size={14} />
-      </summary>
-      <div className="dm-filter-menu">
-        <label className="dm-filter-every">
-          <input
-            type="checkbox"
-            checked={all}
-            ref={box => {
-              if (box) box.indeterminate = !all
-            }}
-            onChange={e => onChange(e.target.checked ? options.map(option => option.value) : [])}
-          />
-          Select all
-        </label>
-        {rows.map(({ option, heading }) => (
-          <div key={option.value}>
-            {heading && <p className="dm-muted dm-filter-group">{heading}</p>}
-            <div className="dm-filter-row">
-              <label className={selected.includes(option.value) ? 'dm-on' : undefined}>
-                <input
-                  type="checkbox"
-                  checked={selected.includes(option.value)}
-                  onChange={e =>
-                    onChange(
-                      e.target.checked
-                        ? [...selected, option.value]
-                        : selected.filter(value => value !== option.value),
-                    )
-                  }
-                />
-                {option.icon && <option.icon size={14} />}
-                <span className="dm-filter-label">{option.label}</span>
-                {option.count !== undefined && <span className="dm-badge">{option.count}</span>}
-              </label>
-              <button type="button" className="dm-filter-only" onClick={() => only(option.value)}>
-                only
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </details>
-  )
-}
-
-/** The rest of a capped list. Never a wire endpoint, so no `data-node`. */
-function MoreCard({ shown, total, onMore }: { shown: number; total: number; onMore: () => void }) {
-  if (shown >= total) return null
-  return (
-    <button type="button" className="dm-node dm-add" onClick={onMore}>
-      <ChevronDown size={18} />
-      <span>Load {Math.min(PAGE, total - shown)} more</span>
-      <span className="dm-muted">
-        {shown} of {total}
-      </span>
-    </button>
-  )
-}
-
-/** A card that adds the thing this block holds. Never a wire endpoint either. */
-function AddCard({ ctx, to, label }: { ctx: PluginContext; to: string; label: string }) {
-  return (
-    <AppLink ctx={ctx} to={to} className="dm-node dm-add" title={label}>
-      <Plus size={18} />
-      <span>{label}</span>
-    </AppLink>
-  )
-}
-
-/**
- * A link out of this frame, in-app or external.
- *
- * The host does the opening either way: an iframe can neither navigate the app around it nor open
- * a tab of its own. The href stays real so the address is visible, copyable and middle-clickable.
- */
-function AppLink({
-  ctx,
-  to,
-  className,
-  title,
-  children,
-}: {
-  ctx: PluginContext
-  /** An in-app path (`/ui/…`) or an absolute URL. */
-  to: string
-  className?: string
-  title?: string
-  children: React.ReactNode
-}) {
-  const inApp = to.startsWith('/')
-  return (
-    <a
-      href={inApp ? `https://app.owox.com${to}` : to}
-      className={className ?? 'dm-link'}
-      title={title}
-      target={inApp ? undefined : '_blank'}
-      rel={inApp ? undefined : 'noreferrer'}
-      onClick={e => {
-        if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
-        e.preventDefault()
-        if (inApp) ctx.ui.navigate(to)
-        else void ctx.ui.openExternal(to)
-      }}
-    >
-      {children}
-    </a>
-  )
-}
-
-/** A card's mark: the connector's own logo when OWOX gives a usable one, a glyph, or initials. */
-function Logo({ name, logo, icon: Icon }: { name?: string; logo?: string; icon?: Mark }) {
-  const usable = logo && /^(https?:|data:)/.test(logo)
-  return (
-    <span className="dm-logo">
-      {usable ? <img src={logo} alt="" width={16} height={16} /> : Icon ? <Icon size={16} /> : initials(name ?? '')}
-    </span>
-  )
-}
-
-const initials = (name: string) =>
-  name
-    .split(/[^a-z0-9]+/i)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map(word => word[0]?.toUpperCase())
-    .join('')
-
-/** The host's own Triggers glyph, so an active refresh reads the same here as it does there. */
-const scheduleLabel = (schedule: { total: number; active: number; cron?: string; nextRun?: string }) =>
-  schedule.active === 0
-    ? `${count(schedule.total, 'scheduled trigger')}, none of them active`
-    : `${count(schedule.total, 'scheduled trigger')}, ${schedule.active} active${
-        schedule.cron ? ` (${schedule.cron})` : ''
-      }${schedule.nextRun ? `, next ${ago(schedule.nextRun)}` : ''}`
-
-/**
- * A Looker Studio report is a live connection rather than a document someone titled, so its own
- * name says nothing; the data mart behind it is the useful label.
- */
-const reportName = (report: Report) =>
-  (report.destinationType === 'LOOKER_STUDIO' ? report.martTitle : undefined) ?? report.title
-
-/** The glyphs the host's own report table uses for a run. */
-function RunIcon({ status }: { status?: string }) {
-  if (status === 'ERROR') return <XCircle size={14} />
-  if (status === 'SUCCESS') return <CircleCheck size={14} />
-  if (status === 'RUNNING') return <Loader2 size={14} className="dm-spin" />
-  return <CircleDashed size={14} />
-}
-
-const runTone = (status?: string) => (status === 'ERROR' ? 'bad' : status === 'SUCCESS' ? 'ok' : 'idle')
-
-function freshnessTone(mart: Mart) {
-  const coverage = mart.freshness?.coverage
-  if (!mart.freshness?.dataLastUpdatedAt || coverage === 'unavailable') return 'idle'
-  return coverage === 'partial' ? 'warn' : 'ok'
-}
-
-function freshnessLabel(mart: Mart) {
-  const at = mart.freshness?.dataLastUpdatedAt
-  if (!at) return 'Freshness: unknown'
-  const coverage = mart.freshness?.coverage
-  return `Data last updated ${ago(at)}${coverage && coverage !== 'complete' ? ` (${coverage})` : ''}`
-}
-
-/** "3 hours ago", from a timestamp — enough for a tooltip, without a date library. */
-function ago(iso: string) {
-  const seconds = (Date.parse(iso) - Date.now()) / 1000
-  if (Number.isNaN(seconds)) return iso
-  const units: Array<[Intl.RelativeTimeFormatUnit, number]> = [
-    ['second', 60],
-    ['minute', 60],
-    ['hour', 24],
-    ['day', 30],
-    ['month', 12],
-    ['year', Infinity],
-  ]
-  let value = seconds
-  for (const [unit, span] of units) {
-    if (Math.abs(value) < span) {
-      return new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' }).format(Math.round(value), unit)
-    }
-    value /= span
-  }
-  return iso
 }

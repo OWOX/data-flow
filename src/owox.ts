@@ -266,6 +266,35 @@ export async function loadModel(ctx: PluginContext): Promise<Model> {
   // One card per destination type that actually has a destination behind it.
   const perType = tally(destinations.map(d => d.type))
 
+  const wires = drawWires(marts, sources, destinationBy, edges, reports)
+  const chains = traceChains(marts, sources, destinationBy, reports)
+
+  return {
+    sources: [...sources.values()].sort((a, b) => b.marts - a.marts || a.name.localeCompare(b.name)),
+    marts,
+    destinationTypes: [...perType].map(([type, destinations]) => ({ type, destinations })),
+    destinations: destinations
+      .map(d => ({ id: d.id, title: d.title, type: d.type, reports: reportsPerDestination.get(d.id) ?? 0 }))
+      .sort((a, b) => b.reports - a.reports || a.title.localeCompare(b.title)),
+    reports: reports.sort((a, b) => (b.lastRunAt ?? '').localeCompare(a.lastRunAt ?? '')),
+    storages: storageList(marts),
+    wires,
+    chains,
+  }
+}
+
+
+type Destinations = Map<string, { id: string; type: string }>
+
+/** Every line on the canvas, and what each one means. */
+function drawWires(
+  marts: Mart[],
+  sources: Map<string, Source>,
+  destinationBy: Destinations,
+  edges: Array<{ from: string; to: string }>,
+  reports: Report[],
+): Wire[] {
+  const known = new Set(marts.map(m => m.id))
   const wires: Wire[] = []
   for (const mart of marts) {
     if (mart.source && sources.has(mart.source)) {
@@ -297,6 +326,21 @@ export async function loadModel(ctx: PluginContext): Promise<Model> {
     }
   }
 
+  return wires
+}
+
+/**
+ * Source → data mart → destination → report, one chain per report, plus the marts that have none.
+ *
+ * This is what lets a selected report reach back to the one data mart that feeds it, rather than to
+ * every mart that happens to share its destination.
+ */
+function traceChains(
+  marts: Mart[],
+  sources: Map<string, Source>,
+  destinationBy: Destinations,
+  reports: Report[],
+): string[][] {
   const martBy = new Map(marts.map(m => [m.id, m]))
   const chains: string[][] = []
   for (const report of reports) {
@@ -319,18 +363,7 @@ export async function loadModel(ctx: PluginContext): Promise<Model> {
     }
   }
 
-  return {
-    sources: [...sources.values()].sort((a, b) => b.marts - a.marts || a.name.localeCompare(b.name)),
-    marts,
-    destinationTypes: [...perType].map(([type, destinations]) => ({ type, destinations })),
-    destinations: destinations
-      .map(d => ({ id: d.id, title: d.title, type: d.type, reports: reportsPerDestination.get(d.id) ?? 0 }))
-      .sort((a, b) => b.reports - a.reports || a.title.localeCompare(b.title)),
-    reports: reports.sort((a, b) => (b.lastRunAt ?? '').localeCompare(a.lastRunAt ?? '')),
-    storages: storageList(marts),
-    wires,
-    chains,
-  }
+  return chains
 }
 
 /**
