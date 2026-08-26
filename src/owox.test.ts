@@ -99,9 +99,15 @@ test('the whole graph: cards, order, badges and lines', async () => {
   // No columnConfig: the report returns every column, so there is no count to badge.
   assert.equal(looker?.columns, 0)
 
-  // Only the live report trigger marks its report.
-  assert.equal(model.reports.find(r => r.id === 'r1')?.schedule?.cron, '0 6 * * *')
-  assert.equal(model.reports.find(r => r.id === 'r2')?.schedule, undefined)
+  // Both report triggers are counted; the connector one belongs to no report.
+  assert.deepEqual(model.reports.find(r => r.id === 'r1')?.schedule, {
+    total: 1,
+    active: 1,
+    cron: '0 6 * * *',
+    nextRun: undefined,
+  })
+  // A paused trigger still counts as added, but leaves nothing to say about the next refresh.
+  assert.deepEqual(model.reports.find(r => r.id === 'r2')?.schedule, { total: 1, active: 0 })
 
   // Most recently run first.
   assert.deepEqual(model.reports.map(r => r.id), ['r2', 'r1', 'r3', 'r4', 'r5'])

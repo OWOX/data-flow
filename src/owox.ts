@@ -43,6 +43,7 @@ export type Mart = {
   fields?: number
   quality?: QualitySummary
   freshness?: Freshness
+  triggers: number
   inbound: number
   outbound: number
   reports: number
@@ -61,8 +62,8 @@ export type Report = {
   destinationType?: string
   lastRunAt?: string
   lastRunStatus?: string
-  /** Set when an active scheduled trigger refreshes this report. */
-  schedule?: { cron?: string; nextRun?: string }
+  /** The scheduled triggers on this report, and how many of them are switched on. */
+  schedule?: { total: number; active: number; cron?: string; nextRun?: string }
   columns: number
   /** A slice filter, applied before the join. */
   preJoin: number
@@ -188,15 +189,20 @@ export async function loadModel(ctx: PluginContext): Promise<Model> {
   const inbound = tally(edges.map(e => e.to))
   const outbound = tally(edges.map(e => e.from))
 
-  // One project-wide call covers every report's refresh schedule; only the live ones count.
-  const scheduled = new Map<string, { cron?: string; nextRun?: string }>()
+  // One project-wide call covers every report's refresh schedule.
+  const scheduled = new Map<string, { total: number; active: number; cron?: string; nextRun?: string }>()
   for (const trigger of triggers.triggers ?? []) {
     const reportId = trigger.triggerConfig?.reportId
-    if (trigger.type !== 'REPORT_RUN' || !trigger.isActive || !reportId) continue
-    scheduled.set(reportId, {
-      cron: trigger.cronExpression,
-      nextRun: typeof trigger.nextRunTimestamp === 'string' ? trigger.nextRunTimestamp : undefined,
-    })
+    if (trigger.type !== 'REPORT_RUN' || !reportId) continue
+    const entry = scheduled.get(reportId) ?? { total: 0, active: 0 }
+    entry.total += 1
+    if (trigger.isActive) {
+      entry.active += 1
+      // The cron shown is a live one: a paused trigger says nothing about when the report refreshes.
+      entry.cron ??= trigger.cronExpression
+      entry.nextRun ??= typeof trigger.nextRunTimestamp === 'string' ? trigger.nextRunTimestamp : undefined
+    }
+    scheduled.set(reportId, entry)
   }
 
   const reports: Report[] = rawReports.map((report, i) => ({
@@ -234,6 +240,7 @@ export async function loadModel(ctx: PluginContext): Promise<Model> {
         fields: canvas.fields.get(m.id),
         quality: qualityBy.get(m.id),
         freshness: (m.dataLastUpdated as Freshness | undefined) ?? undefined,
+        triggers: m.triggersCount ?? 0,
         inbound: inbound.get(m.id) ?? 0,
         outbound: outbound.get(m.id) ?? 0,
         reports: reportsPerMart.get(m.id) ?? 0,

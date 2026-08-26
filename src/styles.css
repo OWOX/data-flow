@@ -161,9 +161,21 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
   position: relative; z-index: 2;
   display: flex; flex-direction: column; gap: 0.5rem;
   padding: 0.75rem; border: 1px solid var(--border); border-radius: 0.625rem;
-  background: var(--card); cursor: pointer;
+  background: var(--card); cursor: grab;
   transition: opacity 150ms, box-shadow 150ms;
 }
+/* Held down, the card is being carried rather than pointed at. */
+.dm-node:active { cursor: grabbing; }
+.dm-dragging { opacity: 0.4; }
+
+/* Where the card would land if the button were released now. */
+.dm-drop-before::before, .dm-drop-after::after {
+  content: ''; position: absolute; z-index: 3;
+  top: -0.25rem; bottom: -0.25rem; width: 2px;
+  border-radius: 1px; background: var(--primary);
+}
+.dm-drop-before::before { left: -0.475rem; }
+.dm-drop-after::after { right: -0.475rem; }
 /* A way out of OWOX rather than a stored thing: same card, no wires, opened by the host. */
 .dm-linkcard { text-decoration: none; color: inherit; }
 .dm-linkcard:hover { border-color: var(--muted-foreground); }
@@ -188,6 +200,7 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
   background: var(--muted); color: var(--muted-foreground);
   font-size: 0.6875rem; line-height: 1.5;
 }
+.dm-badge-off { opacity: 0.55; }
 .dm-badge-draft { background: color-mix(in oklab, var(--primary) 15%, transparent); color: var(--primary); }
 
 /* Status glyphs sit on their own line so a long title above cannot push them out of alignment. */

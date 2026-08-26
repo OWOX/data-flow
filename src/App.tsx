@@ -294,7 +294,14 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
     if (!id || page.some(report => report.id === id)) return page
     return [...page, ...model.reports.filter(report => report.id === id)]
   }, [reports, reportLimit, pinned, model.reports])
-  const revision = `${limit}|${storages}|${flags}|${martSearch}|${types}|${reportSearch}|${reportLimit}|${pinned}|${scope}`
+  // Cards can be dragged into another order inside their block; the lines follow them.
+  const sourceCards = useReorder(model.sources, source => source.key)
+  const martCards = useReorder(shown, mart => mart.id)
+  const destinationCards = useReorder(destinations, destination => destination.id)
+  const exitCards = useReorder(EXITS.filter(exit => types.includes(exit.type)), exit => exit.id)
+  const reportCards = useReorder(shownReports, report => report.id)
+
+  const revision = `${limit}|${storages}|${flags}|${martSearch}|${types}|${reportSearch}|${reportLimit}|${pinned}|${scope}|${sourceCards.order}|${martCards.order}|${destinationCards.order}|${reportCards.order}`
   useWires(canvas, model.wires, model.chains, revision, pinned, onPin)
 
   const createMart = `/ui/${ctx.projectId}/data-marts/create`
@@ -324,10 +331,11 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
         count={model.sources.length}
         hint="Input sources behind the connector data marts below. One card per source, badged with how many data marts it feeds."
       >
-        {model.sources.map(source => (
+        {sourceCards.items.map(source => (
           <NodeCard
             key={source.key}
             ctx={ctx}
+            drag={sourceCards.dragProps(source)}
             id={sourceId(source.key)}
             mark={<Logo name={source.name} logo={source.logo} />}
             title={source.name}
@@ -372,8 +380,8 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
           </>
         }
       >
-        {shown.map(mart => (
-          <MartCard key={mart.id} ctx={ctx} mart={mart} />
+        {martCards.items.map(mart => (
+          <MartCard key={mart.id} ctx={ctx} mart={mart} drag={martCards.dragProps(mart)} />
         ))}
         <MoreCard shown={Math.min(limit, marts.length)} total={marts.length} onMore={() => setLimit(limit + PAGE)} />
         <AddCard ctx={ctx} to={createMart} label="New data mart" />
@@ -406,10 +414,11 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
           />
         }
       >
-        {destinations.map(destination => (
+        {destinationCards.items.map(destination => (
           <NodeCard
             key={destination.id}
             ctx={ctx}
+            drag={destinationCards.dragProps(destination)}
             id={destId(destination.id)}
             mark={<Logo icon={DESTINATION[destination.type]?.icon ?? ArchiveRestore} />}
             title={destination.title}
@@ -418,10 +427,11 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
             linkTitle="Open this destination"
           />
         ))}
-        {EXITS.filter(exit => types.includes(exit.type)).map(exit => (
+        {exitCards.items.map(exit => (
           <NodeCard
             key={exit.id}
             ctx={ctx}
+            drag={exitCards.dragProps(exit)}
             id={exit.id}
             mark={<Logo icon={exit.icon} />}
             title={exit.title}
@@ -449,10 +459,11 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
           />
         }
       >
-        {shownReports.map(report => (
+        {reportCards.items.map(report => (
           <NodeCard
             key={report.id}
             ctx={ctx}
+            drag={reportCards.dragProps(report)}
             id={reportId(report.id)}
             title={reportName(report)}
             link={
@@ -471,8 +482,11 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
                 </span>
               )}
               {report.schedule && (
-                <span className="dm-badge" title={scheduleLabel(report.schedule)}>
-                  <CalendarClock size={12} />
+                <span
+                  className={`dm-badge${report.schedule.active === 0 ? ' dm-badge-off' : ''}`}
+                  title={scheduleLabel(report.schedule)}
+                >
+                  <CalendarClock size={12} /> {report.schedule.total}
                 </span>
               )}
               {report.preJoin > 0 && (
@@ -514,6 +528,92 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
   )
 }
 
+type DragProps = {
+  draggable: true
+  className?: string
+  onDragStart: (e: React.DragEvent) => void
+  onDragOver: (e: React.DragEvent) => void
+  onDragEnd: () => void
+  onDrop: (e: React.DragEvent) => void
+}
+
+/**
+ * Cards a reader can put in their own order, within their own block.
+ *
+ * The order lives for the session only: the plugin declares no collections and the sandbox has no
+ * storage, so there is nowhere to keep it. Until the first drop a block keeps the order it was
+ * given; after that, cards it gains later — a "load more", a widened filter — fall in at the end
+ * rather than landing in the middle of someone's arrangement.
+ */
+function useReorder<T>(items: T[], idOf: (item: T) => string) {
+  const [order, setOrder] = useState<string[]>([])
+  const [drop, setDrop] = useState<{ id: string; after: boolean } | null>(null)
+  const dragged = useRef<string | null>(null)
+
+  const ordered = useMemo(() => {
+    if (order.length === 0) return items
+    const rank = new Map(order.map((id, i) => [id, i]))
+    return [...items].sort((a, b) => (rank.get(idOf(a)) ?? Infinity) - (rank.get(idOf(b)) ?? Infinity))
+  }, [items, order, idOf])
+
+  const side = (e: React.DragEvent) => {
+    const box = e.currentTarget.getBoundingClientRect()
+    return e.clientX > box.left + box.width / 2
+  }
+
+  const move = (from: string, to: string, after: boolean) => {
+    if (from === to) return
+    setOrder(previous => {
+      const ids = previous.length > 0 ? [...previous] : ordered.map(idOf)
+      const rest = ids.filter(id => id !== from)
+      const at = rest.indexOf(to)
+      if (at < 0) return previous
+      rest.splice(after ? at + 1 : at, 0, from)
+      return rest
+    })
+  }
+
+  const dragProps = (item: T): DragProps => {
+    const id = idOf(item)
+    const marker =
+      dragged.current === id
+        ? 'dm-dragging'
+        : drop?.id === id
+          ? drop.after
+            ? 'dm-drop-after'
+            : 'dm-drop-before'
+          : undefined
+    return {
+      draggable: true,
+      className: marker,
+      onDragStart: e => {
+        dragged.current = id
+        e.dataTransfer.effectAllowed = 'move'
+        // Firefox starts no drag at all unless the transfer carries something.
+        e.dataTransfer.setData('text/plain', id)
+      },
+      onDragOver: e => {
+        if (!dragged.current || dragged.current === id) return
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'move'
+        setDrop({ id, after: side(e) })
+      },
+      onDragEnd: () => {
+        dragged.current = null
+        setDrop(null)
+      },
+      onDrop: e => {
+        e.preventDefault()
+        if (dragged.current) move(dragged.current, id, side(e))
+        dragged.current = null
+        setDrop(null)
+      },
+    }
+  }
+
+  return { items: ordered, dragProps, order }
+}
+
 /**
  * A card that is one end of a wire.
  *
@@ -530,10 +630,12 @@ function NodeCard({
   note,
   link,
   linkTitle,
+  drag,
   children,
 }: {
   ctx: PluginContext
   id: string
+  drag?: DragProps
   mark?: React.ReactNode
   title: string
   hint?: string
@@ -544,7 +646,14 @@ function NodeCard({
   children?: React.ReactNode
 }) {
   return (
-    <article id={id} data-node tabIndex={0} aria-pressed="false" className="dm-node">
+    <article
+      id={id}
+      data-node
+      tabIndex={0}
+      aria-pressed="false"
+      {...drag}
+      className={`dm-node${drag?.className ? ` ${drag.className}` : ''}`}
+    >
       <div className="dm-node-head">
         {mark}
         <span className="dm-node-title" title={hint ?? title}>
@@ -569,14 +678,21 @@ function NodeCard({
 
 const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`
 
-function MartCard({ ctx, mart }: { ctx: PluginContext; mart: Mart }) {
+function MartCard({ ctx, mart, drag }: { ctx: PluginContext; mart: Mart; drag?: DragProps }) {
   const kind = mart.kind ? KIND[mart.kind] : undefined
   const KindIcon = kind?.icon
   const quality = qualityVisual(mart.quality)
   const QualityIcon = quality.icon
 
   return (
-    <article id={martId(mart.id)} data-node tabIndex={0} aria-pressed="false" className="dm-node">
+    <article
+      id={martId(mart.id)}
+      data-node
+      tabIndex={0}
+      aria-pressed="false"
+      {...drag}
+      className={`dm-node${drag?.className ? ` ${drag.className}` : ''}`}
+    >
       <div className="dm-node-head">
         <span className="dm-node-title" title={mart.title}>
           {mart.title}
@@ -592,6 +708,11 @@ function MartCard({ ctx, mart }: { ctx: PluginContext; mart: Mart }) {
           </span>
         )}
         {mart.fields !== undefined && <span className="dm-badge">{mart.fields} fields</span>}
+        {mart.triggers > 0 && (
+          <span className="dm-badge" title={count(mart.triggers, 'trigger')}>
+            <CalendarClock size={12} /> {mart.triggers}
+          </span>
+        )}
         {mart.outbound > 0 && (
           <span className="dm-badge">
             <Waypoints size={12} /> {count(mart.outbound, 'relationship')}
@@ -837,10 +958,12 @@ const initials = (name: string) =>
     .join('')
 
 /** The host's own Triggers glyph, so an active refresh reads the same here as it does there. */
-const scheduleLabel = (schedule: { cron?: string; nextRun?: string }) =>
-  `Scheduled refresh is active${schedule.cron ? ` (${schedule.cron})` : ''}${
-    schedule.nextRun ? `, next ${ago(schedule.nextRun)}` : ''
-  }`
+const scheduleLabel = (schedule: { total: number; active: number; cron?: string; nextRun?: string }) =>
+  schedule.active === 0
+    ? `${count(schedule.total, 'scheduled trigger')}, none of them active`
+    : `${count(schedule.total, 'scheduled trigger')}, ${schedule.active} active${
+        schedule.cron ? ` (${schedule.cron})` : ''
+      }${schedule.nextRun ? `, next ${ago(schedule.nextRun)}` : ''}`
 
 /**
  * A Looker Studio report is a live connection rather than a document someone titled, so its own
