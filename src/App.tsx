@@ -463,16 +463,12 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
             linkTitle="Open this report"
           >
             <div className="dm-badges">
-              {report.columns > 0 ? (
+              {/* No column picked means every reportable field, which is not a number this page
+                  can put on the badge without asking the data mart for its schema. */}
+              {report.columns > 0 && (
                 <span className="dm-badge" title="Columns in the output">
                   <Columns3 size={12} /> {report.columns}
                 </span>
-              ) : (
-                !report.metricsOnly && (
-                  <span className="dm-badge" title="No column picked: every reportable field of the data mart">
-                    <Columns3 size={12} /> all
-                  </span>
-                )
               )}
               {report.schedule && (
                 <span className="dm-badge" title={scheduleLabel(report.schedule)}>
