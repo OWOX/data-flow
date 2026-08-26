@@ -15,7 +15,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AddCard, Logo, MartCard, MoreCard, NodeCard, RunIcon } from './cards'
+import { AddCard, Logo, MartCard, MoreCard, NodeCard, RunIcon, type CardState } from './cards'
 import { ago, count, reportName, runTone, scheduleLabel } from './format'
 import { Block, MultiSelect, SearchBox } from './controls'
 import { DESTINATION, STORAGE, type Mark } from './icons'
@@ -31,7 +31,7 @@ import {
   type Source,
 } from './owox'
 import { useReorder, type Cards } from './reorder'
-import { useWires } from './wires'
+import { reach, useWires } from './wires'
 
 /** How many cards are on screen before the rest wait behind the block's "load more". */
 const PAGE = 25
@@ -116,6 +116,7 @@ type Page = {
   setReportSearch: (value: string) => void
   reportLimit: number
   setReportLimit: (value: number) => void
+  state: CardState
 }
 
 export default function App() {
@@ -278,6 +279,13 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
 
   // Filters, paging, searching and dragging all reach the lines the same way: by changing which
   // cards are on the page, and in what order.
+  // The pinned card and everything it lights are rendered, not toggled by hand: a filter, a search
+  // or a drag re-renders the block, and would wipe anything written onto the DOM after the fact.
+  const state: CardState = useMemo(
+    () => ({ pinned, lit: pinned ? reach(model.wires, model.chains, pinned).lit : null }),
+    [pinned, model.wires, model.chains],
+  )
+
   const revision = [sourceCards, martCards, destinationCards, exitCards, reportCards]
     .map(block => block.key)
     .join('|')
@@ -311,10 +319,11 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
     setReportSearch,
     reportLimit,
     setReportLimit,
+    state,
   }
 
   return (
-    <div id="canvas" ref={canvas} className="dm-canvas">
+    <div id="canvas" ref={canvas} className={`dm-canvas${pinned ? ' focused' : ''}`}>
       <svg id="wires" aria-hidden="true">
         <defs>
           <marker
@@ -342,7 +351,7 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
   )
 }
 
-function SourcesBlock({ ctx, model, sourceCards }: Page) {
+function SourcesBlock({ state, ctx, model, sourceCards }: Page) {
   return (
       <Block
         icon={Plug}
@@ -355,6 +364,7 @@ function SourcesBlock({ ctx, model, sourceCards }: Page) {
             key={source.key}
             ctx={ctx}
             drag={sourceCards.dragProps(source)}
+            state={state}
             id={sourceId(source.key)}
             mark={<Logo name={source.name} logo={source.logo} />}
             title={source.name}
@@ -366,7 +376,7 @@ function SourcesBlock({ ctx, model, sourceCards }: Page) {
   )
 }
 
-function DataMartsBlock({ ctx, model, marts, martCards, martSearch, setMartSearch, storages, setStorages, flags, setFlags, limit, setLimit, createMart }: Page) {
+function DataMartsBlock({ state, ctx, model, marts, martCards, martSearch, setMartSearch, storages, setStorages, flags, setFlags, limit, setLimit, createMart }: Page) {
   return (
       <Block
         icon={Box}
@@ -404,7 +414,7 @@ function DataMartsBlock({ ctx, model, marts, martCards, martSearch, setMartSearc
         }
       >
         {martCards.items.map(mart => (
-          <MartCard key={mart.id} ctx={ctx} mart={mart} drag={martCards.dragProps(mart)} />
+          <MartCard key={mart.id} ctx={ctx} mart={mart} drag={martCards.dragProps(mart)} state={state} />
         ))}
         <MoreCard
           shown={Math.min(limit, marts.length)}
@@ -417,7 +427,7 @@ function DataMartsBlock({ ctx, model, marts, martCards, martSearch, setMartSearc
   )
 }
 
-function DestinationsBlock({ ctx, model, destinations, destinationCards, exitCards, types, setTypes, apiKeys }: Page) {
+function DestinationsBlock({ state, ctx, model, destinations, destinationCards, exitCards, types, setTypes, apiKeys }: Page) {
   return (
       <Block
         icon={ArchiveRestore}
@@ -451,6 +461,7 @@ function DestinationsBlock({ ctx, model, destinations, destinationCards, exitCar
             key={destination.id}
             ctx={ctx}
             drag={destinationCards.dragProps(destination)}
+            state={state}
             id={destId(destination.id)}
             mark={<Logo icon={DESTINATION[destination.type]?.icon ?? ArchiveRestore} />}
             title={destination.title}
@@ -464,6 +475,7 @@ function DestinationsBlock({ ctx, model, destinations, destinationCards, exitCar
             key={exit.id}
             ctx={ctx}
             drag={exitCards.dragProps(exit)}
+            state={state}
             id={exit.id}
             mark={<Logo icon={exit.icon} />}
             title={exit.title}
@@ -477,7 +489,7 @@ function DestinationsBlock({ ctx, model, destinations, destinationCards, exitCar
   )
 }
 
-function ReportsBlock({ ctx, reports, reportCards, selectedTitle, reportSearch, setReportSearch, reportLimit, setReportLimit }: Page) {
+function ReportsBlock({ state, ctx, reports, reportCards, selectedTitle, reportSearch, setReportSearch, reportLimit, setReportLimit }: Page) {
   return (
       <Block
         icon={FileText}
@@ -500,6 +512,7 @@ function ReportsBlock({ ctx, reports, reportCards, selectedTitle, reportSearch, 
             key={report.id}
             ctx={ctx}
             drag={reportCards.dragProps(report)}
+            state={state}
             id={reportId(report.id)}
             title={reportName(report)}
             link={

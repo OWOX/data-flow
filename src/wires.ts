@@ -20,6 +20,28 @@ const MEANING: Record<Wire['kind'], string> = {
 /** A wire is the same wire whichever end you name first. */
 const pair = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`)
 
+/**
+ * What one card lights: its own wires, and every whole chain it sits on — so a report reaches up
+ * through its destination to the data mart that feeds it, and on to that mart's source, without
+ * lighting every other mart hanging off the same destination.
+ */
+export function reach(wires: Wire[], chains: string[][], id: string) {
+  const lit = new Set<string>([id])
+  const links = new Set<string>()
+  for (const wire of wires) {
+    if (wire.from === id) lit.add(wire.to)
+    if (wire.to === id) lit.add(wire.from)
+  }
+  for (const chain of chains) {
+    if (!chain.includes(id)) continue
+    for (const [i, node] of chain.entries()) {
+      lit.add(node)
+      if (i > 0) links.add(pair(chain[i - 1], node))
+    }
+  }
+  return { lit, links }
+}
+
 type Box = { left: number; right: number; top: number; bottom: number; width: number; height: number }
 
 /** Leave each box from the side that faces the other one: down/up across bands, sideways within one. */
@@ -112,37 +134,25 @@ export function useWires(
     const cards = () => canvas.querySelectorAll<HTMLElement>('[data-node]')
 
     /**
-     * What one card lights: its own wires, and every whole chain it sits on — so a report reaches
-     * up through its destination and type to the data mart that feeds it, and on to that mart's
-     * source, without lighting the other marts hanging off the same destination type.
+     * Hover lighting only.
+     *
+     * A pinned card's lighting is rendered by the page: React rewrites `className` and
+     * `aria-pressed` on every re-render, so anything written here by hand would be wiped the next
+     * time a filter, a search or a drag re-rendered the block.
      */
-    const reach = (id: string) => {
-      const lit = new Set<string>([id, ...(neighbours.get(id) ?? [])])
-      const links = new Set<string>()
-      for (const chain of chains) {
-        if (!chain.includes(id)) continue
-        for (const [i, node] of chain.entries()) {
-          lit.add(node)
-          if (i > 0) links.add(pair(chain[i - 1], node))
-        }
-      }
-      return { lit, links }
-    }
-
     const focus = (id: string | null) => {
       canvas.classList.toggle('focused', Boolean(id))
-      const { lit, links } = id ? reach(id) : { lit: new Set<string>(), links: new Set<string>() }
-      for (const el of cards()) {
-        el.classList.toggle('lit', lit.has(el.id))
-        el.setAttribute('aria-pressed', String(el.id === pinned))
-      }
+      const { lit, links } = id
+        ? reach(wires, chains, id)
+        : { lit: new Set<string>(), links: new Set<string>() }
+      for (const el of cards()) el.classList.toggle('lit', lit.has(el.id))
       for (const path of paths) {
         const from = path.dataset.from ?? ''
         const to = path.dataset.to ?? ''
         path.classList.toggle('lit', Boolean(id) && (from === id || to === id || links.has(pair(from, to))))
       }
     }
-    focus(pinned)
+    if (pinned) focus(pinned)
 
     // A pinned card outranks the pointer: hovering elsewhere leaves it alone.
     const enter = (e: Event) => {

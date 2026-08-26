@@ -167,6 +167,8 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
 /* Held down, the card is being carried rather than pointed at. */
 .dm-node:active { cursor: grabbing; }
 .dm-dragging { opacity: 0.4; }
+/* Dimmed while carried, but still visibly the selected card. */
+.dm-node[aria-pressed='true'].dm-dragging { opacity: 0.6; }
 
 /* Where the card would land if the button were released now. */
 .dm-drop-before::before, .dm-drop-after::after {
@@ -194,6 +196,13 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
 .dm-link:hover { color: var(--foreground); }
 
 .dm-badges { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+/* One line: the badges that fit stay whole, and the one that does not is cut short. */
+.dm-badges-row { flex-wrap: nowrap; overflow: hidden; }
+.dm-badges-row .dm-badge { flex-shrink: 0; white-space: nowrap; }
+/* The one badge allowed to lose its tail — "3 relationships" becomes "3 relat…" before the row
+   spills. Its full text stays in the title. */
+.dm-badges-row .dm-badge-shrink { flex-shrink: 1; min-width: 2.75rem; overflow: hidden; text-overflow: ellipsis; }
+.dm-badges-row .dm-badge svg { flex-shrink: 0; }
 .dm-badge {
   display: inline-flex; align-items: center; gap: 0.25rem;
   border-radius: 0.375rem; padding: 0.0625rem 0.375rem;
@@ -235,6 +244,7 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
    back, and its own lines come forward. Clicking pins that state so the pointer can leave. */
 .dm-canvas.focused .dm-node { opacity: 0.25; }
 .dm-canvas.focused .dm-node.lit { opacity: 1; }
+.dm-canvas.focused .dm-node[aria-pressed='true'] { opacity: 1; }
 /* Adding a card and loading the rest stay available whatever is selected. */
 /* Adding a card and loading the rest stay available whatever is selected: above every other card
    and every line, and never dimmed with them. */

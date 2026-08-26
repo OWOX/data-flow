@@ -17,6 +17,12 @@ import { count, freshnessLabel, freshnessTone, initials, qualityVisual } from '.
 import { martId, type Mart } from './owox'
 import type { DragProps } from './reorder'
 
+/** What the page knows about the selection, which only the page can render without losing it. */
+export type CardState = { pinned: string | null; lit: Set<string> | null }
+
+const cardClass = (id: string, state?: CardState, dragged?: string) =>
+  ['dm-node', state?.lit?.has(id) ? 'lit' : '', dragged ?? ''].filter(Boolean).join(' ')
+
 export function NodeCard({
   ctx,
   id,
@@ -29,6 +35,8 @@ export function NodeCard({
   link,
   linkTitle,
   drag,
+  state,
+  badgeRow,
   children,
 }: {
   ctx: PluginContext
@@ -42,6 +50,10 @@ export function NodeCard({
   note?: string
   link?: string
   linkTitle?: string
+  /** Rendered rather than toggled by hand: a re-render mid-drag must not drop the ring. */
+  state?: CardState
+  /** Keep the badges on one line, letting the longest one truncate. */
+  badgeRow?: boolean
   children?: React.ReactNode
 }) {
   return (
@@ -49,9 +61,9 @@ export function NodeCard({
       id={id}
       data-node
       tabIndex={0}
-      aria-pressed="false"
+      aria-pressed={state?.pinned === id}
       {...drag}
-      className={`dm-node${drag?.className ? ` ${drag.className}` : ''}`}
+      className={cardClass(id, state, drag?.className)}
     >
       <div className="dm-node-head">
         {mark}
@@ -66,7 +78,7 @@ export function NodeCard({
       </div>
       {note && <div className="dm-muted dm-node-sub">{note}</div>}
       {(badge || badges) && (
-        <div className="dm-badges">
+        <div className={`dm-badges${badgeRow ? ' dm-badges-row' : ''}`}>
           {badge && <span className="dm-badge">{badge}</span>}
           {badges}
         </div>
@@ -76,7 +88,17 @@ export function NodeCard({
   )
 }
 
-export function MartCard({ ctx, mart, drag }: { ctx: PluginContext; mart: Mart; drag?: DragProps }) {
+export function MartCard({
+  ctx,
+  mart,
+  drag,
+  state,
+}: {
+  ctx: PluginContext
+  mart: Mart
+  drag?: DragProps
+  state?: CardState
+}) {
   const kind = mart.kind ? KIND[mart.kind] : undefined
   const KindIcon = kind?.icon
   const quality = qualityVisual(mart.quality)
@@ -90,6 +112,8 @@ export function MartCard({ ctx, mart, drag }: { ctx: PluginContext; mart: Mart; 
       link={`/ui/${ctx.projectId}/data-marts/${mart.id}`}
       linkTitle="Open this data mart"
       drag={drag}
+      state={state}
+      badgeRow
       badges={
         <>
           {kind && (
@@ -104,7 +128,7 @@ export function MartCard({ ctx, mart, drag }: { ctx: PluginContext; mart: Mart; 
             </span>
           )}
           {mart.outbound > 0 && (
-            <span className="dm-badge">
+            <span className="dm-badge dm-badge-shrink" title={count(mart.outbound, 'relationship')}>
               <Waypoints size={12} /> {count(mart.outbound, 'relationship')}
             </span>
           )}
