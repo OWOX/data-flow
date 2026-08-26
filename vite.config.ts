@@ -18,8 +18,6 @@ const server = {
 
 export default defineConfig({
   base: '/',
-  // npm sets this when the build runs through a script, so the page can say which build it is.
-  define: { __VERSION__: JSON.stringify(process.env.npm_package_version ?? 'dev') },
   plugins: [react()],
   server,
   preview: server,
