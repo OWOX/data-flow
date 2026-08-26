@@ -477,8 +477,8 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
               {/* No column picked means every reportable field, which is not a number this page
                   can put on the badge without asking the data mart for its schema. */}
               {report.columns > 0 && (
-                <span className="dm-badge" title="Columns in the output">
-                  <Columns3 size={12} /> {report.columns}
+                <span className="dm-badge" title={`${count(report.columns, 'column')} in the output`}>
+                  <Columns3 size={12} />
                 </span>
               )}
               {report.schedule && (
@@ -486,22 +486,22 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
                   className={`dm-badge${report.schedule.active === 0 ? ' dm-badge-off' : ''}`}
                   title={scheduleLabel(report.schedule)}
                 >
-                  <CalendarClock size={12} /> {report.schedule.total}
+                  <CalendarClock size={12} />
                 </span>
               )}
               {report.preJoin > 0 && (
                 <span className="dm-badge" title={`Pre-join filter (slice) — ${count(report.preJoin, 'rule')}`}>
-                  <Layers size={12} /> {report.preJoin}
+                  <Layers size={12} />
                 </span>
               )}
               {report.postJoin > 0 && (
                 <span className="dm-badge" title={`Output filter — ${count(report.postJoin, 'rule')}`}>
-                  <Filter size={12} /> {report.postJoin}
+                  <Filter size={12} />
                 </span>
               )}
               {report.aggregations > 0 && (
                 <span className="dm-badge" title={count(report.aggregations, 'aggregated column')}>
-                  <Sigma size={12} /> {report.aggregations}
+                  <Sigma size={12} />
                 </span>
               )}
             </div>
