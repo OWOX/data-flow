@@ -428,10 +428,16 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
             linkTitle="Open this report"
           >
             <div className="dm-badges">
-              {report.columns > 0 && (
+              {report.columns > 0 ? (
                 <span className="dm-badge" title="Columns in the output">
                   <Columns3 size={12} /> {report.columns}
                 </span>
+              ) : (
+                !report.metricsOnly && (
+                  <span className="dm-badge" title="No column picked: every column of the data mart">
+                    <Columns3 size={12} /> all
+                  </span>
+                )
               )}
               {report.schedule && (
                 <span className="dm-badge" title={scheduleLabel(report.schedule)}>

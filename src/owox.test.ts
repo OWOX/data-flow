@@ -95,6 +95,9 @@ test('the whole graph: cards, order, badges and lines', async () => {
 
   const daily = model.reports.find(r => r.id === 'r1')
   assert.deepEqual([daily?.columns, daily?.preJoin, daily?.postJoin, daily?.aggregations], [3, 1, 2, 1])
+  assert.equal(daily?.metricsOnly, true)
+  // No columnConfig and no aggregate: the report returns every column, it does not return none.
+  assert.deepEqual([looker?.columns, looker?.metricsOnly], [0, false])
 
   // Only the live report trigger marks its report.
   assert.equal(model.reports.find(r => r.id === 'r1')?.schedule?.cron, '0 6 * * *')

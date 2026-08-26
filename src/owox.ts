@@ -53,6 +53,13 @@ export type Report = {
   /** Set when an active scheduled trigger refreshes this report. */
   schedule?: { cron?: string; nextRun?: string }
   columns: number
+  /**
+   * The report asks for aggregates or unique counts, so no columns means no dimensions.
+   *
+   * Without one of those, an empty `columnConfig` means every native column instead — the
+   * distinction OWOX draws in `isMetricsOnlyProjection`.
+   */
+  metricsOnly: boolean
   /** A slice filter, applied before the join. */
   preJoin: number
   /** An output filter, applied after it — the placement OWOX leaves unset. */
@@ -108,6 +115,7 @@ type RawReport = {
   lastRunAt?: string
   lastRunStatus?: string
   columnConfig?: unknown[]
+  uniqueCountConfig?: boolean | string[] | null
   filterConfig?: Array<{ placement?: string }>
   aggregationConfig?: unknown[]
   dataMart?: { id?: string; title?: string } | null
@@ -201,6 +209,10 @@ export async function loadModel(ctx: PluginContext): Promise<Model> {
     lastRunStatus: report.lastRunStatus,
     schedule: report.id ? scheduled.get(report.id) : undefined,
     columns: report.columnConfig?.length ?? 0,
+    metricsOnly:
+      (report.aggregationConfig?.length ?? 0) > 0 ||
+      report.uniqueCountConfig === true ||
+      (Array.isArray(report.uniqueCountConfig) && report.uniqueCountConfig.length > 0),
     preJoin: report.filterConfig?.filter(rule => rule?.placement === 'pre-join').length ?? 0,
     postJoin: report.filterConfig?.filter(rule => rule?.placement !== 'pre-join').length ?? 0,
     aggregations: report.aggregationConfig?.length ?? 0,
