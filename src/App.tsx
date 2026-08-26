@@ -6,17 +6,21 @@ import {
   CalendarClock,
   ChevronDown,
   CircleAlert,
+  Columns3,
   CircleCheck,
   CircleDashed,
   Clock,
   Database,
   ExternalLink,
   FileText,
+  Filter,
   Info,
   KeyRound,
+  ListFilter,
   Plug,
   Plus,
   Search,
+  Sigma,
   Sparkles,
   Waypoints,
 } from 'lucide-react'
@@ -369,16 +373,38 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
             }
             linkTitle="Open this report"
           >
+            <div className="dm-badges">
+              {report.columns > 0 && (
+                <span className="dm-badge" title="Columns in the output">
+                  <Columns3 size={12} /> {report.columns}
+                </span>
+              )}
+              {report.schedule && (
+                <span className="dm-badge" title={scheduleLabel(report.schedule)}>
+                  <CalendarClock size={12} />
+                </span>
+              )}
+              {report.preJoin > 0 && (
+                <span className="dm-badge" title={`${count(report.preJoin, 'slice filter')}, applied before the join`}>
+                  <ListFilter size={12} />
+                </span>
+              )}
+              {report.postJoin > 0 && (
+                <span className="dm-badge" title={`${count(report.postJoin, 'output filter')}, applied after the join`}>
+                  <Filter size={12} />
+                </span>
+              )}
+              {report.aggregations > 0 && (
+                <span className="dm-badge" title={count(report.aggregations, 'aggregated column')}>
+                  <Sigma size={12} />
+                </span>
+              )}
+            </div>
             <div className="dm-node-foot">
               <span className={`dm-status dm-${runTone(report.lastRunStatus)}`}>
                 {report.lastRunStatus === 'ERROR' ? <CircleAlert size={14} /> : <CircleCheck size={14} />}
               </span>
               <span className="dm-muted dm-run">{report.lastRunAt ? ago(report.lastRunAt) : 'never run'}</span>
-              {report.schedule && (
-                <span className="dm-status dm-ok dm-scheduled" title={scheduleLabel(report.schedule)}>
-                  <CalendarClock size={14} />
-                </span>
-              )}
             </div>
           </NodeCard>
         ))}

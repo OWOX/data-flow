@@ -50,6 +50,12 @@ export type Report = {
   lastRunStatus?: string
   /** Set when an active scheduled trigger refreshes this report. */
   schedule?: { cron?: string; nextRun?: string }
+  columns: number
+  /** A slice filter, applied before the join. */
+  preJoin: number
+  /** An output filter, applied after it — the placement OWOX leaves unset. */
+  postJoin: number
+  aggregations: number
 }
 
 export type Wire = {
@@ -99,6 +105,9 @@ type RawReport = {
   title?: string
   lastRunAt?: string
   lastRunStatus?: string
+  columnConfig?: unknown[]
+  filterConfig?: Array<{ placement?: string }>
+  aggregationConfig?: unknown[]
   dataMart?: { id?: string; title?: string } | null
   dataDestinationAccess?: { id?: string; title?: string; type?: string } | null
 }
@@ -185,6 +194,10 @@ export async function loadModel(ctx: PluginContext): Promise<Model> {
     lastRunAt: report.lastRunAt,
     lastRunStatus: report.lastRunStatus,
     schedule: report.id ? scheduled.get(report.id) : undefined,
+    columns: report.columnConfig?.length ?? 0,
+    preJoin: report.filterConfig?.filter(rule => rule?.placement === 'pre-join').length ?? 0,
+    postJoin: report.filterConfig?.filter(rule => rule?.placement !== 'pre-join').length ?? 0,
+    aggregations: report.aggregationConfig?.length ?? 0,
   }))
   const reportsPerMart = tally(reports.map(r => r.martId))
   const reportsPerDestination = tally(reports.map(r => r.destinationId))

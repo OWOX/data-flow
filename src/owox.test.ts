@@ -39,7 +39,18 @@ const ctx = (over: Record<string, unknown> = {}) => {
           }
         : [
             // Two reports, same mart, same destination type — one line, not two.
-            { id: 'r1', title: 'Daily', lastRunAt: '2026-08-02T00:00:00Z', lastRunStatus: 'SUCCESS', dataMart: { id: 'm1', title: 'Facebook ads' }, dataDestinationAccess: { id: 'd1', type: 'GOOGLE_SHEETS' } },
+            {
+              id: 'r1',
+              title: 'Daily',
+              lastRunAt: '2026-08-02T00:00:00Z',
+              lastRunStatus: 'SUCCESS',
+              dataMart: { id: 'm1', title: 'Facebook ads' },
+              dataDestinationAccess: { id: 'd1', type: 'GOOGLE_SHEETS' },
+              columnConfig: ['date', 'spend', 'clicks'],
+              // An unset placement is an output filter, which is how OWOX writes the common case.
+              filterConfig: [{ placement: 'pre-join' }, { placement: 'post-join' }, {}],
+              aggregationConfig: [{ column: 'spend', function: 'SUM' }],
+            },
             { id: 'r2', title: 'Weekly', lastRunAt: '2026-08-03T00:00:00Z', lastRunStatus: 'ERROR', dataMart: { id: 'm1', title: 'Facebook ads' }, dataDestinationAccess: { id: 'd2', type: 'GOOGLE_SHEETS' } },
             { id: 'r3', title: 'Blend export', lastRunAt: '2026-08-01T00:00:00Z', lastRunStatus: 'SUCCESS', dataMart: { id: 'm3' }, dataDestinationAccess: { id: 'd3', type: 'LOOKER_STUDIO' } },
             // A report on a mart this member cannot list must not invent a card.
@@ -78,6 +89,9 @@ test('the whole graph: cards, order, badges and lines', async () => {
   assert.deepEqual(model.destinationTypes.map(d => [d.type, d.destinations]), [['GOOGLE_SHEETS', 2], ['LOOKER_STUDIO', 1]])
   // Looker counts two: a report whose data mart this member cannot see still writes to it.
   assert.deepEqual(model.destinations.map(d => [d.title, d.reports]), [['Looker', 3], ['Sheet A', 1], ['Sheet B', 1]])
+  const daily = model.reports.find(r => r.id === 'r1')
+  assert.deepEqual([daily?.columns, daily?.preJoin, daily?.postJoin, daily?.aggregations], [3, 1, 2, 1])
+
   // Only the live report trigger marks its report.
   assert.equal(model.reports.find(r => r.id === 'r1')?.schedule?.cron, '0 6 * * *')
   assert.equal(model.reports.find(r => r.id === 'r2')?.schedule, undefined)
