@@ -179,8 +179,13 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
     return () => document.removeEventListener('click', close)
   }, [])
 
-  // A selected report reaches back to one data mart, which the filter or the 25-card cap may have
-  // left off the page. Show it anyway: a highlight that points at nothing is worse than an extra card.
+  /**
+   * The page of data marts, plus any the selection points at.
+   *
+   * A selected report reaches back to one data mart, and a selected data mart to the ones it joins;
+   * either may sit behind a filter or past the 25-card cap. Show them anyway — a highlight pointing
+   * at nothing is worse than an extra card.
+   */
   const shown = useMemo(() => {
     const page = marts.slice(0, limit)
     if (!pinned) return page
@@ -192,8 +197,13 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
         .filter(id => id.startsWith('dm-'))
         .map(id => id.slice(3)),
     )
+    for (const wire of model.wires) {
+      if (wire.kind !== 'relationship') continue
+      if (wire.from === pinned) wanted.add(wire.to.slice(3))
+      if (wire.to === pinned) wanted.add(wire.from.slice(3))
+    }
     return [...page, ...model.marts.filter(mart => wanted.has(mart.id) && !on.has(mart.id))]
-  }, [marts, limit, pinned, model.chains, model.marts])
+  }, [marts, limit, pinned, model.chains, model.wires, model.marts])
   const shownReports = reports.slice(0, reportLimit)
   const revision = `${limit}|${storages}|${flags}|${martSearch}|${types}|${reportSearch}|${reportLimit}|${pinned}`
   useWires(canvas, model.wires, model.chains, revision, pinned, onPin)
@@ -242,7 +252,7 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
         icon={Box}
         title="Data Marts"
         count={marts.length}
-        hint={`Published before draft, connector-based before the rest, then ordered by how much depends on them: joins in, joins out, reports. ${PAGE} at a time. Quality and freshness sit along the bottom of each card.`}
+        hint={`Published before draft, connector-based before the rest, then ordered by how much depends on them: joins in, joins out, reports. ${PAGE} at a time. A dashed line between two data marts is a relationship — a join OWOX knows how to make between them, drawn from the mart that holds the join to the one it points at. Quality and freshness sit along the bottom of each card. Selecting a mart brings the marts it joins onto the page, wherever they are in the list.`}
         toolbar={
           <>
             <SearchBox value={martSearch} onChange={setMartSearch} label="Search data marts" />
@@ -310,7 +320,6 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
             linkTitle="Open this destination"
           />
         ))}
-        <AddCard ctx={ctx} to={`/ui/${ctx.projectId}/data-destinations`} label="New destination" />
         {EXITS.map(exit => (
           <NodeCard
             key={exit.id}
@@ -323,6 +332,7 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
             linkTitle={`Open ${exit.title}`}
           />
         ))}
+        <AddCard ctx={ctx} to={`/ui/${ctx.projectId}/data-destinations`} label="New destination" />
       </Block>
 
       <Block

@@ -44,7 +44,6 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
 #wires .source { stroke: var(--muted-foreground); stroke-width: 1; opacity: 0.3; }
 #wires .relationship { stroke: var(--muted-foreground); stroke-width: 1.25; opacity: 0.45; stroke-dasharray: 4 3; }
 #wires .report { stroke: var(--primary); stroke-width: 1.5; opacity: 0.45; }
-#wires .type { stroke: var(--primary); stroke-width: 1; opacity: 0.3; }
 #wires .run { stroke: var(--muted-foreground); stroke-width: 1; opacity: 0.3; }
 /* A route nothing has ever run: kept off the canvas until its card is selected. */
 #wires .dormant { stroke: var(--primary); stroke-width: 1.5; stroke-dasharray: 2 4; opacity: 0; }
@@ -201,8 +200,10 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
 .dm-canvas.focused .dm-node { opacity: 0.25; }
 .dm-canvas.focused .dm-node.lit { opacity: 1; }
 /* Adding a card and loading the rest stay available whatever is selected. */
-.dm-add { z-index: 3; }
-.dm-canvas.focused .dm-add { opacity: 0.9; }
+/* Adding a card and loading the rest stay available whatever is selected: above every other card
+   and every line, and never dimmed with them. */
+.dm-add, .dm-canvas.focused .dm-add { z-index: 4; opacity: 0.9; }
+.dm-add:hover, .dm-canvas.focused .dm-add:hover { opacity: 1; }
 .dm-canvas.focused #wires path { opacity: 0.06; }
 .dm-canvas.focused #wires path.dormant:not(.lit) { opacity: 0; }
 .dm-canvas.focused #wires path.lit { opacity: 1; stroke-width: 2; }
