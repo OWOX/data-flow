@@ -2,7 +2,7 @@
 // lines connect them. Run with `npm test` — node strips the types, so this needs no test framework.
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { loadModel, reportableFields } from './owox.ts'
+import { loadModel } from './owox.ts'
 
 const ctx = (over: Record<string, unknown> = {}) => {
   const marts = [
@@ -159,19 +159,3 @@ test('an endpoint the member cannot read costs only its own detail', async () =>
   assert.deepEqual(model.wires.map(w => w.kind), ['source', 'source'])
 })
 
-test('a reportable field count leaves out the columns hidden for reporting', async () => {
-  const ctx = {
-    owox: {
-      getJson: async (path: string) => {
-        assert.equal(path, '/api/data-marts/m1')
-        return {
-          schema: {
-            fields: [{ name: 'date' }, { name: 'spend' }, { name: 'internal_id', isHiddenForReporting: true }],
-          },
-        }
-      },
-    },
-  } as never
-
-  assert.equal(await reportableFields(ctx, 'm1'), 2)
-})

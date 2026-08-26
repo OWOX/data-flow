@@ -30,7 +30,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   destId,
   loadModel,
-  reportableFields,
   martId,
   reportId,
   sourceId,
@@ -216,14 +215,6 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
     )
   }, [model.reports, selectedMart, selectedDestination, reportSearch])
 
-  /**
-   * How many fields the marts behind "all columns" reports actually expose.
-   *
-   * Fetched per data mart, so only for the reports on screen that say "all" — a failure is
-   * remembered as -1 rather than retried on every render.
-   */
-  const [reportable, setReportable] = useState<Record<string, number>>({})
-
   // `<details name>` closes the other menu when one opens; nothing but this closes the last one
   // when the pointer goes elsewhere.
   useEffect(() => {
@@ -268,31 +259,6 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
     if (!id || page.some(report => report.id === id)) return page
     return [...page, ...model.reports.filter(report => report.id === id)]
   }, [reports, reportLimit, pinned, model.reports])
-  useEffect(() => {
-    const wanted = [
-      ...new Set(
-        shownReports
-          .filter(report => report.columns === 0 && !report.metricsOnly && report.martId)
-          .map(report => report.martId as string),
-      ),
-    ].filter(id => !(id in reportable))
-    if (wanted.length === 0) return
-
-    let live = true
-    void Promise.all(
-      wanted.map(async id => {
-        try {
-          return [id, await reportableFields(ctx, id)] as const
-        } catch {
-          return [id, -1] as const
-        }
-      }),
-    ).then(rows => live && setReportable(prev => ({ ...prev, ...Object.fromEntries(rows) })))
-    return () => {
-      live = false
-    }
-  }, [shownReports, reportable, ctx])
-
   const revision = `${limit}|${storages}|${flags}|${martSearch}|${types}|${reportSearch}|${reportLimit}|${pinned}|${scope}`
   useWires(canvas, model.wires, model.chains, revision, pinned, onPin)
 
@@ -469,8 +435,7 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
               ) : (
                 !report.metricsOnly && (
                   <span className="dm-badge" title="No column picked: every reportable field of the data mart">
-                    <Columns3 size={12} />{' '}
-                    {reportableCount(reportable, report.martId) ?? 'all'}
+                    <Columns3 size={12} /> all
                   </span>
                 )
               )}
@@ -569,12 +534,6 @@ function NodeCard({
       {children}
     </article>
   )
-}
-
-/** -1 marks a data mart whose schema could not be read; the badge falls back to "all". */
-const reportableCount = (known: Record<string, number>, martId?: string) => {
-  const fields = martId ? known[martId] : undefined
-  return fields === undefined || fields < 0 ? undefined : fields
 }
 
 const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`
