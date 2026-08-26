@@ -45,7 +45,9 @@ export type Report = {
   id: string
   title: string
   martId?: string
+  martTitle?: string
   destinationId?: string
+  destinationType?: string
   lastRunAt?: string
   lastRunStatus?: string
   /** Set when an active scheduled trigger refreshes this report. */
@@ -190,7 +192,11 @@ export async function loadModel(ctx: PluginContext): Promise<Model> {
     id: report.id ?? `report-${i}`,
     title: report.title ?? 'Untitled report',
     martId: report.dataMart?.id,
+    martTitle: report.dataMart?.title,
     destinationId: report.dataDestinationAccess?.id,
+    destinationType: report.dataDestinationAccess?.id
+      ? destinationBy.get(report.dataDestinationAccess.id)?.type
+      : undefined,
     lastRunAt: report.lastRunAt,
     lastRunStatus: report.lastRunStatus,
     schedule: report.id ? scheduled.get(report.id) : undefined,

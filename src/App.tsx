@@ -27,7 +27,17 @@ import {
   XCircle,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { destId, loadModel, martId, reportId, sourceId, type Mart, type Model, type QualityState } from './owox'
+import {
+  destId,
+  loadModel,
+  martId,
+  reportId,
+  sourceId,
+  type Mart,
+  type Model,
+  type QualityState,
+  type Report,
+} from './owox'
 import { DESTINATION, KIND, STORAGE, type Mark } from './icons'
 import { useWires } from './wires'
 
@@ -66,10 +76,16 @@ const FLAGS: Array<{ key: string; facet: string; label: string; test: (mart: Mar
   { key: 'no-errors', facet: 'errors', label: 'Without errors', test: m => !m.errors },
 ]
 
-/** Ways out of OWOX that no endpoint lists. Selectable like any card; only the link opens. */
-const EXITS: Array<{ id: string; icon: Mark; title: string; note: string; to: string }> = [
+/**
+ * Ways out of OWOX that no endpoint lists. Selectable like any card; only the link opens.
+ *
+ * `type` puts them under the same filter as the real destinations, so picking Google Sheets hides
+ * them the way it hides a Slack destination.
+ */
+const EXITS: Array<{ id: string; type: string; icon: Mark; title: string; note: string; to: string }> = [
   {
     id: 'x-claude',
+    type: 'AI',
     icon: Sparkles,
     title: 'Claude',
     note: 'OWOX Data Marts connector',
@@ -77,13 +93,20 @@ const EXITS: Array<{ id: string; icon: Mark; title: string; note: string; to: st
   },
   {
     id: 'x-chatgpt',
+    type: 'AI',
     icon: Bot,
     title: 'ChatGPT',
     note: 'OWOX Data Marts app',
     to: 'https://chatgpt.com/plugins/plugin_asdk_app_6a3e81be8f8481918e1e2cd1d7ea09c4',
   },
-  { id: 'x-api', icon: KeyRound, title: 'API', note: 'Read the marts over HTTP', to: '' },
+  { id: 'x-api', type: 'API', icon: KeyRound, title: 'API', note: 'Read the marts over HTTP', to: '' },
 ]
+
+/** The filter rows behind those cards: no endpoint counts them, so they count themselves. */
+const EXIT_TYPES = [
+  { type: 'AI', label: 'AI', icon: Sparkles },
+  { type: 'API', label: 'API', icon: KeyRound },
+].map(row => ({ ...row, destinations: EXITS.filter(exit => exit.type === row.type).length }))
 
 const FACETS = [...new Set(FLAGS.map(flag => flag.facet))]
 
@@ -139,7 +162,10 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
   const [storages, setStorages] = useState(() => model.storages.map(storage => storage.title))
   const [flags, setFlags] = useState(() => FLAGS.map(flag => flag.key))
   const [martSearch, setMartSearch] = useState('')
-  const [types, setTypes] = useState(() => model.destinationTypes.map(type => type.type))
+  const [types, setTypes] = useState(() => [
+    ...model.destinationTypes.map(type => type.type),
+    ...EXIT_TYPES.map(row => row.type),
+  ])
   const [reportSearch, setReportSearch] = useState('')
   const [reportLimit, setReportLimit] = useState(PAGE)
   // Selecting something re-aims the Reports block, so its page count starts over with it.
@@ -174,7 +200,7 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
       report =>
         (!selectedMart || report.martId === selectedMart) &&
         (!selectedDestination || report.destinationId === selectedDestination) &&
-        (needle === '' || report.title.toLowerCase().includes(needle)),
+        (needle === '' || reportName(report).toLowerCase().includes(needle)),
     )
   }, [model.reports, selectedMart, selectedDestination, reportSearch])
 
@@ -308,12 +334,20 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
         toolbar={
           <MultiSelect
             label="Type"
-            options={model.destinationTypes.map(type => ({
-              value: type.type,
-              label: DESTINATION[type.type]?.label ?? type.type,
-              count: type.destinations,
-              icon: DESTINATION[type.type]?.icon ?? ArchiveRestore,
-            }))}
+            options={[
+              ...model.destinationTypes.map(type => ({
+                value: type.type,
+                label: DESTINATION[type.type]?.label ?? type.type,
+                count: type.destinations,
+                icon: DESTINATION[type.type]?.icon ?? ArchiveRestore,
+              })),
+              ...EXIT_TYPES.map(row => ({
+                value: row.type,
+                label: row.label,
+                count: row.destinations,
+                icon: row.icon,
+              })),
+            ]}
             selected={types}
             onChange={setTypes}
           />
@@ -331,7 +365,7 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
             linkTitle="Open this destination"
           />
         ))}
-        {EXITS.map(exit => (
+        {EXITS.filter(exit => types.includes(exit.type)).map(exit => (
           <NodeCard
             key={exit.id}
             ctx={ctx}
@@ -367,7 +401,7 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
             key={report.id}
             ctx={ctx}
             id={reportId(report.id)}
-            title={report.title}
+            title={reportName(report)}
             link={
               report.martId
                 ? `/ui/${ctx.projectId}/data-marts/${report.martId}/reports?reportId=${report.id}`
@@ -388,17 +422,17 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
               )}
               {report.preJoin > 0 && (
                 <span className="dm-badge" title={`Pre-join filter (slice) — ${count(report.preJoin, 'rule')}`}>
-                  <Layers size={12} />
+                  <Layers size={12} /> {report.preJoin}
                 </span>
               )}
               {report.postJoin > 0 && (
                 <span className="dm-badge" title={`Output filter — ${count(report.postJoin, 'rule')}`}>
-                  <Filter size={12} />
+                  <Filter size={12} /> {report.postJoin}
                 </span>
               )}
               {report.aggregations > 0 && (
                 <span className="dm-badge" title={count(report.aggregations, 'aggregated column')}>
-                  <Sigma size={12} />
+                  <Sigma size={12} /> {report.aggregations}
                 </span>
               )}
             </div>
@@ -739,6 +773,13 @@ const scheduleLabel = (schedule: { cron?: string; nextRun?: string }) =>
   `Scheduled refresh is active${schedule.cron ? ` (${schedule.cron})` : ''}${
     schedule.nextRun ? `, next ${ago(schedule.nextRun)}` : ''
   }`
+
+/**
+ * A Looker Studio report is a live connection rather than a document someone titled, so its own
+ * name says nothing; the data mart behind it is the useful label.
+ */
+const reportName = (report: Report) =>
+  (report.destinationType === 'LOOKER_STUDIO' ? report.martTitle : undefined) ?? report.title
 
 /** The glyphs the host's own report table uses for a run. */
 function RunIcon({ status }: { status?: string }) {

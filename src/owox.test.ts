@@ -89,6 +89,10 @@ test('the whole graph: cards, order, badges and lines', async () => {
   assert.deepEqual(model.destinationTypes.map(d => [d.type, d.destinations]), [['GOOGLE_SHEETS', 2], ['LOOKER_STUDIO', 1]])
   // Looker counts two: a report whose data mart this member cannot see still writes to it.
   assert.deepEqual(model.destinations.map(d => [d.title, d.reports]), [['Looker', 3], ['Sheet A', 1], ['Sheet B', 1]])
+  // A Looker report carries its data mart, which the page shows in place of its own name.
+  const looker = model.reports.find(r => r.id === 'r3')
+  assert.equal(looker?.destinationType, 'LOOKER_STUDIO')
+
   const daily = model.reports.find(r => r.id === 'r1')
   assert.deepEqual([daily?.columns, daily?.preJoin, daily?.postJoin, daily?.aggregations], [3, 1, 2, 1])
 
