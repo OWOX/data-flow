@@ -25,6 +25,8 @@ import { destId, loadModel, martId, reportId, sourceId, type Mart, type Model, t
 import { DESTINATION, KIND, STORAGE, type Mark } from './icons'
 import { useWires } from './wires'
 
+declare const __VERSION__: string
+
 /** How many cards are on screen before the rest wait behind the block's "load more". */
 const PAGE = 25
 
@@ -102,7 +104,9 @@ export default function App() {
   return (
     <div className="dm-page">
       <header className="dm-page-header">
-        <h1 className="dm-page-header-title">Model Canvas</h1>
+        <h1 className="dm-page-header-title">
+          Model Canvas <span className="dm-muted dm-version">{__VERSION__}</span>
+        </h1>
       </header>
       <main className="dm-page-content">
         {error ? (
