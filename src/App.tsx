@@ -191,7 +191,12 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
       mart =>
         storages.includes(mart.storage) &&
         (needle === '' || mart.title.toLowerCase().includes(needle)) &&
-        FACETS.every(facet => chosen.some(flag => flag.facet === facet && flag.test(mart))),
+        FACETS.every(facet => {
+          // Picking one option out of a facet empties the others, and an empty facet asks for
+          // nothing rather than for the impossible.
+          const rules = chosen.filter(flag => flag.facet === facet)
+          return rules.length === 0 || rules.some(flag => flag.test(mart))
+        }),
     )
   }, [model.marts, storages, flags, martSearch])
 
@@ -326,6 +331,7 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
             <MultiSelect
               label="Filter"
               options={FLAGS.map(flag => ({ value: flag.key, label: flag.label, group: flag.facet }))}
+              emptyMeans="all"
               selected={flags}
               onChange={next => {
                 setFlags(next)
@@ -638,14 +644,23 @@ function MultiSelect({
   options,
   selected,
   onChange,
+  emptyMeans = 'none',
 }: {
   label: string
   options: Array<{ value: string; label: string; group?: string; count?: number; icon?: Mark }>
   selected: string[]
   onChange: (next: string[]) => void
+  /** What an empty menu asks for: nothing at all, or nothing in particular. */
+  emptyMeans?: 'none' | 'all'
 }) {
   if (options.length === 0) return null
   const all = selected.length === options.length
+  const groupOf = (value: string) => options.find(option => option.value === value)?.group
+
+  // "only" narrows within a facet and leaves the others alone; in a menu with no facets, that is
+  // the whole menu.
+  const only = (value: string) =>
+    onChange([...selected.filter(other => groupOf(other) !== groupOf(value)), value])
 
   // Each facet is labelled once, above its first option.
   const headed = new Set<string>()
@@ -660,7 +675,7 @@ function MultiSelect({
       <summary>
         {label}
         <span className={all || selected.length === 0 ? 'dm-filter-all' : 'dm-filter-count'}>
-          {all ? 'All' : selected.length === 0 ? 'None' : selected.length}
+          {all || (selected.length === 0 && emptyMeans === 'all') ? 'All' : selected.length === 0 ? 'None' : selected.length}
         </span>
         <ChevronDown size={14} />
       </summary>
@@ -679,22 +694,27 @@ function MultiSelect({
         {rows.map(({ option, heading }) => (
           <div key={option.value}>
             {heading && <p className="dm-muted dm-filter-group">{heading}</p>}
-            <label className={selected.includes(option.value) ? 'dm-on' : undefined}>
-              <input
-                type="checkbox"
-                checked={selected.includes(option.value)}
-                onChange={e =>
-                  onChange(
-                    e.target.checked
-                      ? [...selected, option.value]
-                      : selected.filter(value => value !== option.value),
-                  )
-                }
-              />
-              {option.icon && <option.icon size={14} />}
-              <span className="dm-filter-label">{option.label}</span>
-              {option.count !== undefined && <span className="dm-badge">{option.count}</span>}
-            </label>
+            <div className="dm-filter-row">
+              <label className={selected.includes(option.value) ? 'dm-on' : undefined}>
+                <input
+                  type="checkbox"
+                  checked={selected.includes(option.value)}
+                  onChange={e =>
+                    onChange(
+                      e.target.checked
+                        ? [...selected, option.value]
+                        : selected.filter(value => value !== option.value),
+                    )
+                  }
+                />
+                {option.icon && <option.icon size={14} />}
+                <span className="dm-filter-label">{option.label}</span>
+                {option.count !== undefined && <span className="dm-badge">{option.count}</span>}
+              </label>
+              <button type="button" className="dm-filter-only" onClick={() => only(option.value)}>
+                only
+              </button>
+            </div>
           </div>
         ))}
       </div>
