@@ -110,6 +110,14 @@ const EXIT_TYPES = [
 
 const FACETS = [...new Set(FLAGS.map(flag => flag.facet))]
 
+/** Lines pass under cards, so a line that seems to join two cards may only be crossing one. */
+const LEGEND = [
+  { kind: 'source', label: 'feeds' },
+  { kind: 'relationship', label: 'joins (relationship)' },
+  { kind: 'report', label: 'runs into' },
+  { kind: 'dormant', label: 'never run' },
+]
+
 export default function App() {
   const [ctx, setCtx] = useState<PluginContext | null>(null)
   const [model, setModel] = useState<Model | null>(null)
@@ -136,6 +144,16 @@ export default function App() {
         <h1 className="dm-page-header-title">
           Model Canvas <span className="dm-muted dm-version">{__VERSION__}</span>
         </h1>
+        <ul className="dm-legend dm-muted">
+          {LEGEND.map(item => (
+            <li key={item.label}>
+              <svg width="26" height="8" aria-hidden="true">
+                <line x1="1" y1="4" x2="25" y2="4" className={item.kind} />
+              </svg>
+              {item.label}
+            </li>
+          ))}
+        </ul>
       </header>
       <main className="dm-page-content">
         {error ? (

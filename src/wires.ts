@@ -8,6 +8,15 @@ import type { Wire } from './owox'
 
 const NS = 'http://www.w3.org/2000/svg'
 
+/** What each line is, for the tooltip it carries — lines pass under cards, so they must say. */
+const MEANING: Record<Wire['kind'], string> = {
+  source: 'Source → data mart: the connector that feeds it',
+  relationship: 'Relationship: a join between two data marts',
+  report: 'Route: a report runs this data mart into that destination',
+  dormant: 'Route never run: the report exists, but has never carried data',
+  run: 'Destination → report: a report that writes to it',
+}
+
 /** A wire is the same wire whichever end you name first. */
 const pair = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`)
 
@@ -58,6 +67,9 @@ export function useWires(
       path.setAttribute('marker-end', 'url(#arrowhead)')
       path.dataset.from = wire.from
       path.dataset.to = wire.to
+      const title = document.createElementNS(NS, 'title')
+      title.textContent = MEANING[wire.kind]
+      path.append(title)
       svg.append(path)
       return path
     })
