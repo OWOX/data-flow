@@ -76,6 +76,8 @@ const EXITS: Array<{ id: string; icon: Mark; title: string; note: string; to: st
   { id: 'x-api', icon: KeyRound, title: 'API', note: 'Read the marts over HTTP', to: '' },
 ]
 
+const FACETS = [...new Set(FLAGS.map(flag => flag.facet))]
+
 export default function App() {
   const [ctx, setCtx] = useState<PluginContext | null>(null)
   const [model, setModel] = useState<Model | null>(null)
@@ -121,10 +123,12 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
   const canvas = useRef<HTMLDivElement>(null)
   const [pinned, setPinned] = useState<string | null>(null)
   const [limit, setLimit] = useState(PAGE)
-  const [storages, setStorages] = useState<string[]>([])
-  const [flags, setFlags] = useState<string[]>([])
+  // Filters start with everything ticked rather than empty: an empty menu now means "none", which
+  // is what unticking "Select all" asks for.
+  const [storages, setStorages] = useState(() => model.storages.map(storage => storage.title))
+  const [flags, setFlags] = useState(() => FLAGS.map(flag => flag.key))
   const [martSearch, setMartSearch] = useState('')
-  const [types, setTypes] = useState<string[]>([])
+  const [types, setTypes] = useState(() => model.destinationTypes.map(type => type.type))
   const [reportSearch, setReportSearch] = useState('')
   const [reportLimit, setReportLimit] = useState(PAGE)
   // Selecting something re-aims the Reports block, so its page count starts over with it.
@@ -135,18 +139,16 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
 
   const marts = useMemo(() => {
     const chosen = FLAGS.filter(flag => flags.includes(flag.key))
-    const facets = [...new Set(chosen.map(flag => flag.facet))]
     const needle = martSearch.trim().toLowerCase()
     return model.marts.filter(
       mart =>
-        (storages.length === 0 || storages.includes(mart.storage)) &&
+        storages.includes(mart.storage) &&
         (needle === '' || mart.title.toLowerCase().includes(needle)) &&
-        facets.every(facet => chosen.some(flag => flag.facet === facet && flag.test(mart))),
+        FACETS.every(facet => chosen.some(flag => flag.facet === facet && flag.test(mart))),
     )
   }, [model.marts, storages, flags, martSearch])
 
-  const destinations =
-    types.length === 0 ? model.destinations : model.destinations.filter(d => types.includes(d.type))
+  const destinations = model.destinations.filter(destination => types.includes(destination.type))
 
   // Selecting a data mart or a destination turns the Reports block into that card's reports.
   const selectedMart = pinned?.startsWith('dm-') ? pinned.slice(3) : null
@@ -177,7 +179,21 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
     return () => document.removeEventListener('click', close)
   }, [])
 
-  const shown = marts.slice(0, limit)
+  // A selected report reaches back to one data mart, which the filter or the 25-card cap may have
+  // left off the page. Show it anyway: a highlight that points at nothing is worse than an extra card.
+  const shown = useMemo(() => {
+    const page = marts.slice(0, limit)
+    if (!pinned) return page
+    const on = new Set(page.map(mart => mart.id))
+    const wanted = new Set(
+      model.chains
+        .filter(chain => chain.includes(pinned))
+        .flat()
+        .filter(id => id.startsWith('dm-'))
+        .map(id => id.slice(3)),
+    )
+    return [...page, ...model.marts.filter(mart => wanted.has(mart.id) && !on.has(mart.id))]
+  }, [marts, limit, pinned, model.chains, model.marts])
   const shownReports = reports.slice(0, reportLimit)
   const revision = `${limit}|${storages}|${flags}|${martSearch}|${types}|${reportSearch}|${reportLimit}|${pinned}`
   useWires(canvas, model.wires, model.chains, revision, pinned, onPin)
@@ -255,17 +271,12 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
             />
           </>
         }
-        footer={
-          <div className="dm-band-grid dm-band-foot">
-            <MoreCard shown={shown.length} total={marts.length} onMore={() => setLimit(limit + PAGE)} />
-            <AddCard ctx={ctx} to={createMart} label="New data mart" />
-          </div>
-        }
       >
         {shown.map(mart => (
           <MartCard key={mart.id} ctx={ctx} mart={mart} />
         ))}
-        {shown.length === 0 && <p className="dm-muted dm-empty">No data mart matches this filter.</p>}
+        <MoreCard shown={Math.min(limit, marts.length)} total={marts.length} onMore={() => setLimit(limit + PAGE)} />
+        <AddCard ctx={ctx} to={createMart} label="New data mart" />
       </Block>
 
       <Block
@@ -286,11 +297,6 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
             onChange={setTypes}
           />
         }
-        footer={
-          <div className="dm-band-grid dm-band-foot">
-            <AddCard ctx={ctx} to={`/ui/${ctx.projectId}/data-destinations`} label="New destination" />
-          </div>
-        }
       >
         {destinations.map(destination => (
           <NodeCard
@@ -304,6 +310,7 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
             linkTitle="Open this destination"
           />
         ))}
+        <AddCard ctx={ctx} to={`/ui/${ctx.projectId}/data-destinations`} label="New destination" />
         {EXITS.map(exit => (
           <NodeCard
             key={exit.id}
@@ -333,17 +340,6 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
             label="Search reports"
           />
         }
-        footer={
-          reports.length > shownReports.length ? (
-            <div className="dm-band-grid dm-band-foot">
-              <MoreCard
-                shown={shownReports.length}
-                total={reports.length}
-                onMore={() => setReportLimit(reportLimit + PAGE)}
-              />
-            </div>
-          ) : undefined
-        }
       >
         {shownReports.map(report => (
           <NodeCard
@@ -367,6 +363,11 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
             </div>
           </NodeCard>
         ))}
+        <MoreCard
+          shown={shownReports.length}
+          total={reports.length}
+          onMore={() => setReportLimit(reportLimit + PAGE)}
+        />
         {reports.length === 0 && (
           <p className="dm-muted dm-empty">
             {selectedTitle ? 'Nothing here has reports.' : 'No reports in this project yet.'}
@@ -485,7 +486,6 @@ function Block({
   count: total,
   hint,
   toolbar,
-  footer,
   children,
 }: {
   icon: Mark
@@ -493,7 +493,6 @@ function Block({
   count?: number
   hint: string
   toolbar?: React.ReactNode
-  footer?: React.ReactNode
   children: React.ReactNode
 }) {
   return (
@@ -511,7 +510,6 @@ function Block({
         {toolbar && <div className="dm-band-tools">{toolbar}</div>}
       </header>
       <div className="dm-band-grid">{children}</div>
-      {footer}
     </section>
   )
 }
@@ -535,8 +533,8 @@ function SearchBox({ value, onChange, label }: { value: string; onChange: (v: st
  * A checkbox menu on a native `<details>` — no library, and `name` makes the browser close the
  * other one when this opens, so only ever one is down at a time.
  *
- * Nothing selected filters nothing, which is the same result as everything selected: both say
- * "All" and draw every row checked, rather than leaving the reader to work that out.
+ * Every row starts ticked, so "Select all" is a real toggle: unticking it empties the menu and the
+ * block goes empty with it, which is what asking for none of them means.
  */
 function MultiSelect({
   label,
@@ -550,7 +548,7 @@ function MultiSelect({
   onChange: (next: string[]) => void
 }) {
   if (options.length === 0) return null
-  const all = selected.length === 0 || selected.length === options.length
+  const all = selected.length === options.length
 
   // Each facet is labelled once, above its first option.
   const headed = new Set<string>()
@@ -564,7 +562,9 @@ function MultiSelect({
     <details className="dm-filter" name="dm-filter">
       <summary>
         {label}
-        <span className={all ? 'dm-filter-all' : 'dm-filter-count'}>{all ? 'All' : selected.length}</span>
+        <span className={all || selected.length === 0 ? 'dm-filter-all' : 'dm-filter-count'}>
+          {all ? 'All' : selected.length === 0 ? 'None' : selected.length}
+        </span>
         <ChevronDown size={14} />
       </summary>
       <div className="dm-filter-menu">
@@ -575,25 +575,22 @@ function MultiSelect({
             ref={box => {
               if (box) box.indeterminate = !all
             }}
-            // Unchecking it would ask for "none", which filters to nothing anyone wants to see.
-            onChange={e => e.target.checked && onChange(options.map(option => option.value))}
+            onChange={e => onChange(e.target.checked ? options.map(option => option.value) : [])}
           />
           Select all
         </label>
         {rows.map(({ option, heading }) => (
           <div key={option.value}>
             {heading && <p className="dm-muted dm-filter-group">{heading}</p>}
-            <label className={all || selected.includes(option.value) ? 'dm-on' : undefined}>
+            <label className={selected.includes(option.value) ? 'dm-on' : undefined}>
               <input
                 type="checkbox"
-                // Everything is included when nothing is picked, so every row reads that way too.
-                checked={all || selected.includes(option.value)}
+                checked={selected.includes(option.value)}
                 onChange={e =>
                   onChange(
                     e.target.checked
                       ? [...selected, option.value]
-                      : // Dropping one out of "all" leaves the others behind, not an empty menu.
-                        (all ? options.map(o => o.value) : selected).filter(value => value !== option.value),
+                      : selected.filter(value => value !== option.value),
                   )
                 }
               />
@@ -603,11 +600,6 @@ function MultiSelect({
             </label>
           </div>
         ))}
-        {selected.length > 0 && (
-          <button type="button" className="dm-filter-clear" onClick={() => onChange([])}>
-            Clear
-          </button>
-        )}
       </div>
     </details>
   )

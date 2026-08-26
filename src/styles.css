@@ -60,7 +60,7 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
 }
 :root.dark .dm-band { background: color-mix(in oklab, white 4%, transparent); border-bottom-color: color-mix(in oklab, white 4%, transparent); }
 
-.dm-band-head { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
+.dm-band-head { position: relative; z-index: 5; display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
 .dm-band-icon {
   display: inline-flex; align-items: center; justify-content: center;
   width: 1.75rem; height: 1.75rem; border-radius: 0.25rem;
@@ -72,7 +72,6 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
 .dm-band-count { font-size: 0.8125rem; }
 .dm-band-tools { display: flex; gap: 0.5rem; margin-left: auto; }
 .dm-band-grid { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); }
-.dm-band-foot { margin-top: 0.75rem; }
 .dm-empty { margin: 0; font-size: 0.8125rem; }
 
 /* The block description, on the ⓘ. No `title`: it waits a second, wraps where it likes, and cannot
@@ -205,5 +204,6 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
 .dm-add { z-index: 3; }
 .dm-canvas.focused .dm-add { opacity: 0.9; }
 .dm-canvas.focused #wires path { opacity: 0.06; }
+.dm-canvas.focused #wires path.dormant:not(.lit) { opacity: 0; }
 .dm-canvas.focused #wires path.lit { opacity: 1; stroke-width: 2; }
 .dm-node[aria-pressed='true'] { box-shadow: 0 0 0 2px var(--primary); }
