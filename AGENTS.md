@@ -28,3 +28,18 @@ Not GitHub Pages. `https://data-flow.dorland.keenetic.pro/` is KeenDNS in front 
 port 8787; `npm run preview` (built) or `npm run dev` (live) both bind it, with `cors` and
 `allowedHosts` set in `vite.config.ts`. Keep `delivery.url` in `plugin.json` equal to that address,
 and keep `base: '/'` — the page sits at the domain root, not under a repo path.
+
+## Develop
+
+    npm install
+    npm run typecheck
+    npm run lint
+    npm run build          # -> dist/
+
+There is no standalone preview: `connect()` needs the real host handshake, so test by publishing a
+release to **Only me** and installing it in OWOX Data Marts. Serve the page with
+`npm run build && npm run preview` (what OWOX loads in production) or `npm run dev` (live reload,
+same URL) — both bind 8787.
+
+Release with `gh release create vX.Y.Z --target main --generate-notes`; OWOX reads `plugin.json`
+from the release commit.

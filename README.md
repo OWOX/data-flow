@@ -1,33 +1,51 @@
-# Data Flow — OWOX Data Marts plugin
+# Data Flow
 
-The project's data model on one page: **Sources** → **Data Marts** → **Destinations**, as cards with
-the lines that connect them. Hover a card to isolate what it touches, click to pin it. Read-only.
-Runs in the OWOX plugin iframe; all API calls are brokered by the host through
-[`@owox/plugin-sdk`](https://docs.owox.com/packages/plugin-sdk/readme/) — the plugin never holds a
-credential and stores nothing (no collections declared).
+**The whole path from source to report, on one page.**
 
-## Develop
+A read-only plugin for [OWOX Data Marts](https://docs.owox.com/): **Sources → Data Marts →
+Destinations → Reports**, drawn as cards with the lines that connect them.
 
-    npm install
-    npm run typecheck
-    npm run lint
-    npm run build          # -> dist/
+![Data Flow: sources, data marts, destinations and reports on one canvas, with the selected chain highlighted](docs/screenshot.png)
 
-There is no standalone preview: `connect()` needs the real host handshake, so test by publishing a
-release to **Only me** and installing it in OWOX Data Marts.
+## The challenge
 
-## Deploy
+A number in a report is only as good as the chain behind it, and the chain is what no single screen
+shows. OWOX already knows all of it — the source behind a mart, the joins, the reports, the
+destinations they write to, the last run and the quality checks. It's just never in one place.
+Each piece is a different screen, a different tab, a different row you have to open, and the flow
+itself only ever exists in your head — assembled one click at a time, gone again by the next
+question.
 
-Served from this Mac, not GitHub Pages (private repo on a free org plan). KeenDNS terminates HTTPS
-for `https://data-flow.dorland.keenetic.pro/` and proxies it to this host on **8787** — the same
-port `vite` pins for both commands:
+## What this gives you
 
-    npm run build && npm run preview   # the built page, what OWOX loads in production
-    npm run dev                        # live reload, same URL, while iterating inside OWOX
+- **The whole picture, one screen.** Every source, mart, destination and report, and every line
+  between them. Hover a card to isolate what it touches; click to pin it and follow the chain
+  end to end — upstream to the source, downstream to the report.
+- **Quality and freshness where you can see them.** Each data mart carries its quality state and
+  last-updated time, and the card border takes the worst of the two. Each report shows its last run
+  status and when it ran. A broken link in the chain is visible before anyone asks about it.
+- **Filters that answer real questions.** Marts without relationships. Drafts. Marts with errors.
+  Marts nothing reports on. Reports without triggers. Filter by storage, by destination type, by
+  search — the lines redraw with the cards.
+- **Reports in context.** Select a data mart or a destination and the Reports block narrows to just
+  its reports.
+- **Every card is a link.** The corner icon opens that mart, destination or report in OWOX.
 
-Both send `Access-Control-Allow-Origin: *` (`server.cors`) and no `X-Frame-Options`, which the
-opaque-origin iframe requires, and accept the tunnel's Host via `allowedHosts`.
+Skip the hours of clicking through screens to reconstruct a lineage. Know the quality of the
+reports you're responsible for before the meeting, not during it.
 
-Release with `gh release create vX.Y.Z --target main --generate-notes`; OWOX reads `plugin.json`
-from the release commit, so the repo being private means publishing once and following the GitHub
-App install link OWOX returns.
+## Zero setup
+
+Install it and open it — nothing to configure, nothing to connect. The plugin reads your project
+through the OWOX host and shows you what's there.
+
+It stores nothing. It writes nothing.
+
+## Install
+
+In OWOX Data Marts, add the plugin from its release and open **Data Flow** from the project menu.
+
+---
+
+Source: [github.com/OWOX/data-flow](https://github.com/OWOX/data-flow) — build, hosting and release
+notes live in [AGENTS.md](AGENTS.md).
