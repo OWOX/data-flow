@@ -273,4 +273,9 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
 .dm-add, .dm-canvas.focused .dm-add { z-index: 4; opacity: 0.9; }
 .dm-add:hover, .dm-canvas.focused .dm-add:hover { opacity: 1; }
 .dm-canvas.focused #wires path.lit { stroke-width: 2; }
-.dm-node[aria-pressed='true'] { box-shadow: 0 0 0 2px var(--primary); }
+/* Selected outranks hovered: pointing at the card you already chose does not turn it grey. */
+.dm-node[aria-pressed='true'],
+.dm-node[aria-pressed='true']:hover {
+  border-color: var(--border);
+  box-shadow: 0 0 0 2px var(--primary);
+}
