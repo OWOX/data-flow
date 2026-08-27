@@ -5,7 +5,6 @@
 // (`data-quality/summaries` and `health-status` each take ids and return states). `recheck` below
 // is the one exception, and only a button press reaches it.
 import type { PluginContext } from '@owox/plugin-sdk'
-import { count } from './format.ts'
 import type { OWOXDataMart } from '@owox/api-client'
 
 export type QualityState =
@@ -220,11 +219,20 @@ async function perStorage(ctx: PluginContext, storageIds: string[]) {
   return { fields, edges }
 }
 
-/** What the page can say while it waits: how many reads have landed, and what they found. */
-export type Progress = { done: number; total: number; found: string[] }
+/**
+ * What the page knows before it knows everything.
+ *
+ * The blocks are on screen from the first paint, so a read that lands with a count hands it
+ * straight to that block's badge — the page fills in rather than appearing all at once.
+ */
+export type Progress = {
+  done: number
+  total: number
+  counts: { sources?: number; marts?: number; destinations?: number; reports?: number }
+}
 
 /** The reads below, counted once so the bar cannot drift from the work. */
-const READS = 9
+const READS = 8
 
 /**
  * The two checks the host runs from its own Actions menu, over every mart on the page.
@@ -254,28 +262,25 @@ export const settling = (model: Model) =>
 
 export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) => void): Promise<Model> {
   let done = 0
-  const found: string[] = []
+  const counts: Progress['counts'] = {}
   /** Report a read the moment it lands, rather than when the batch it rides in finishes. */
-  const track = <T,>(work: Promise<T>, describe?: (value: T) => string) =>
+  const track = <T,>(work: Promise<T>, tally?: (value: T) => Partial<Progress['counts']>) =>
     work.then(value => {
       done += 1
-      if (describe) found.push(describe(value))
-      onProgress?.({ done, total: READS, found: [...found] })
+      Object.assign(counts, tally?.(value))
+      onProgress?.({ done, total: READS, counts: { ...counts } })
       return value
     })
 
   const [dataMarts, destinations, storages] = await Promise.all([
-    track(ctx.owox.dataMarts.list(), m => count(m.length, 'data mart')),
-    track(ctx.owox.destinations.list(), d => count(d.length, 'destination')),
-    track(
-      optional(() => ctx.owox.storages.list(), [] as Awaited<ReturnType<typeof ctx.owox.storages.list>>),
-      s => count(s.length, 'storage'),
-    ),
+    track(ctx.owox.dataMarts.list(), m => ({ marts: m.length })),
+    track(ctx.owox.destinations.list(), d => ({ destinations: d.length })),
+    optional(() => ctx.owox.storages.list(), [] as Awaited<ReturnType<typeof ctx.owox.storages.list>>),
   ])
 
   const [connectors, rawReports, triggers, quality, health, canvas] = await Promise.all([
-    track(optional(() => ctx.owox.getJson<Connector[]>('/api/connectors'), []), c => count(c.length, 'source')),
-    track(optional(() => ctx.owox.getJson<RawReport[]>('/api/reports'), []), r => count(r.length, 'report')),
+    track(optional(() => ctx.owox.getJson<Connector[]>('/api/connectors'), []), c => ({ sources: c.length })),
+    track(optional(() => ctx.owox.getJson<RawReport[]>('/api/reports'), []), r => ({ reports: r.length })),
     track(optional(() => ctx.owox.getJson<{ triggers?: Trigger[] }>('/api/data-marts/scheduled-triggers'), {})),
     track(
       optional(
@@ -297,7 +302,7 @@ export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) =
         {},
       ),
     ),
-    track(perStorage(ctx, storages.map(s => s.id)), c => count(c.edges.length, 'relationship')),
+    track(perStorage(ctx, storages.map(s => s.id))),
   ])
 
   const connectorRunBy = new Map((health.items ?? []).map(row => [row.dataMartId, row.connector?.status]))

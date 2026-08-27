@@ -154,9 +154,22 @@ type Page = {
   reportLimit: number
   setReportLimit: (value: number) => void
   state: CardState
+  pending: Progress | null
   /** Runs both host checks over every mart, then re-reads until quality stops moving. */
   onRecheck: () => void
   checking: boolean
+}
+
+/** The shape of a project nothing has been read from yet, so the blocks can be drawn at once. */
+const NOTHING_YET: Model = {
+  sources: [],
+  marts: [],
+  destinationTypes: [],
+  destinations: [],
+  reports: [],
+  storages: [],
+  wires: [],
+  chains: [],
 }
 
 export default function App() {
@@ -220,43 +233,31 @@ export default function App() {
             <p className="dm-bad">Could not read the project</p>
             <p className="dm-muted">{error}</p>
           </section>
-        ) : !model || !ctx ? (
-          <Loading progress={progress} />
-        ) : (
-          <Canvas ctx={ctx} model={model} onRecheck={onRecheck} checking={checking} />
-        )}
+        ) : ctx ? (
+          <Canvas
+            ctx={ctx}
+            model={model ?? NOTHING_YET}
+            pending={model ? null : progress}
+            onRecheck={onRecheck}
+            checking={checking}
+          />
+        ) : null}
       </main>
     </div>
-  )
-}
-
-/**
- * What the page shows while it reads.
- *
- * The bar tracks reads that have actually landed, not a timer — nine of them, and each one that
- * comes back with something to count says so, so the wait is spent watching the project arrive.
- */
-function Loading({ progress }: { progress: Progress | null }) {
-  const { done = 0, total = 1, found = [] } = progress ?? {}
-  return (
-    <section className="dm-card dm-loading">
-      <p className="dm-loading-title">Reading the project…</p>
-      <div className="dm-progress" role="progressbar" aria-valuenow={done} aria-valuemin={0} aria-valuemax={total}>
-        <span style={{ width: `${Math.round((done / total) * 100)}%` }} />
-      </div>
-      <p className="dm-muted dm-loading-found">{found.join(' · ') || '\u00a0'}</p>
-    </section>
   )
 }
 
 function Canvas({
   ctx,
   model,
+  pending,
   onRecheck,
   checking,
 }: {
   ctx: PluginContext
   model: Model
+  /** Set while the project is still being read: counts to show before the cards exist. */
+  pending: Progress | null
   onRecheck: () => void
   checking: boolean
 }) {
@@ -298,12 +299,8 @@ function Canvas({
       mart =>
         storages.includes(mart.storage) &&
         (needle === '' || mart.title.toLowerCase().includes(needle)) &&
-        FACETS.every(facet => {
-          // Picking one option out of a facet empties the others, and an empty facet asks for
-          // nothing rather than for the impossible.
-          const rules = chosen.filter(flag => flag.facet === facet)
-          return rules.length === 0 || rules.some(flag => flag.test(mart))
-        }),
+        // A facet with nothing ticked asks for nothing, so nothing is what it gets.
+        FACETS.every(facet => chosen.some(flag => flag.facet === facet && flag.test(mart))),
     )
   }, [model.marts, storages, flags, martSearch])
 
@@ -324,8 +321,8 @@ function Canvas({
         (!selectedMart || report.martId === selectedMart) &&
         (!selectedDestination || report.destinationId === selectedDestination) &&
         (needle === '' || reportName(report).toLowerCase().includes(needle)) &&
-        // Nothing ticked constrains nothing, as in the Data Marts filter.
-        (chosen.length === 0 || chosen.some(flag => flag.test(report))),
+        // Nothing ticked asks for nothing, as in the Data Marts filter.
+        chosen.some(flag => flag.test(report)),
     )
   }, [model.reports, selectedMart, selectedDestination, reportSearch, reportFlags])
 
@@ -425,6 +422,7 @@ function Canvas({
     reportLimit,
     setReportLimit,
     state,
+    pending,
     onRecheck,
     checking,
   }
@@ -458,12 +456,12 @@ function Canvas({
   )
 }
 
-function SourcesBlock({ state, ctx, model, sourceCards }: Page) {
+function SourcesBlock({ state, ctx, model, sourceCards, pending }: Page) {
   return (
     <Block
       icon={Plug}
       title="Sources"
-      count={model.sources.length}
+      count={pending?.counts.sources ?? model.sources.length}
       hint="Input sources behind the connector data marts below. One card per source, badged with how many data marts it feeds."
     >
       {sourceCards.items.map(source => (
@@ -501,14 +499,14 @@ function RecheckButton({ onRecheck, checking }: { onRecheck: () => void; checkin
   )
 }
 
-function DataMartsBlock({ state, ctx, model, marts, martCards, martSearch, setMartSearch, storages, setStorages, flags, setFlags, limit, setLimit, onRecheck, checking }: Page) {
+function DataMartsBlock({ state, ctx, model, marts, martCards, martSearch, setMartSearch, storages, setStorages, flags, setFlags, limit, setLimit, onRecheck, checking, pending }: Page) {
   return (
     <Block
       id={MARTS}
       lit={state.lit?.has(MARTS)}
       icon={Box}
       title="Data Marts"
-      count={marts.length}
+      count={pending?.counts.marts ?? marts.length}
       action={<RecheckButton onRecheck={onRecheck} checking={checking} />}
       hint={`Ordered by how much depends on them, ${PAGE} at a time. A dashed line is a relationship — a join between two marts; selecting one brings the marts it joins onto the page.`}
       toolbar={
@@ -531,7 +529,6 @@ function DataMartsBlock({ state, ctx, model, marts, martCards, martSearch, setMa
           <MultiSelect
             label="Filter"
             options={FLAGS.map(flag => ({ value: flag.key, label: flag.label, group: flag.facet }))}
-            emptyMeans="all"
             selected={flags}
             onChange={next => {
               setFlags(next)
@@ -555,12 +552,12 @@ function DataMartsBlock({ state, ctx, model, marts, martCards, martSearch, setMa
   )
 }
 
-function DestinationsBlock({ state, ctx, model, destinations, destinationCards, exitCards, types, setTypes }: Page) {
+function DestinationsBlock({ state, ctx, model, destinations, destinationCards, exitCards, types, setTypes, pending }: Page) {
   return (
     <Block
       icon={ArchiveRestore}
       title="Destinations"
-      count={destinations.length}
+      count={pending?.counts.destinations ?? destinations.length}
       hint="Where the reports go, badged with how many write to each. Claude, ChatGPT and the API are ways out that no endpoint lists — select them, or follow the link in the corner."
       toolbar={
         <MultiSelect
@@ -630,12 +627,13 @@ function ReportsBlock({
   setReportFlags,
   reportLimit,
   setReportLimit,
+  pending,
 }: Page) {
   return (
     <Block
       icon={FileText}
       title={selectedTitle ? `Reports · ${selectedTitle}` : 'Reports'}
-      count={reports.length}
+      count={pending?.counts.reports ?? reports.length}
       hint={`The ${PAGE} most recently run reports. Select a data mart or a destination above and this block narrows to its reports.`}
       toolbar={
         <>
@@ -650,7 +648,6 @@ function ReportsBlock({
           <MultiSelect
             label="Filter"
             options={REPORT_FLAGS.map(flag => ({ value: flag.key, label: flag.label }))}
-            emptyMeans="all"
             selected={reportFlags}
             onChange={next => {
               setReportFlags(next)

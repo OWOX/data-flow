@@ -72,20 +72,16 @@ export function MultiSelect({
   options,
   selected,
   onChange,
-  emptyMeans = 'none',
 }: {
   label: string
   options: Array<{ value: string; label: string; group?: string; count?: number; icon?: Mark }>
   selected: string[]
   onChange: (next: string[]) => void
-  /** What an empty menu asks for: nothing at all, or nothing in particular. */
-  emptyMeans?: 'none' | 'all'
 }) {
   if (options.length === 0) return null
   const all = selected.length === options.length
-  // "All" when everything is ticked, or when an empty menu is the one that constrains nothing.
-  const summary =
-    all || (selected.length === 0 && emptyMeans === 'all') ? 'All' : selected.length === 0 ? 'None' : selected.length
+  // An empty menu asks for nothing, and says so.
+  const summary = all ? 'All' : selected.length === 0 ? 'None' : selected.length
   const groupOf = (value: string) => options.find(option => option.value === value)?.group
 
   // "only" narrows within a facet and leaves the others alone; in a menu with no facets, that is
