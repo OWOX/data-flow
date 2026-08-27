@@ -9,6 +9,7 @@ export function Block({
   hint,
   toolbar,
   action,
+  loading,
   id,
   lit,
   children,
@@ -20,6 +21,8 @@ export function Block({
   toolbar?: React.ReactNode
   /** Sits beside the count: something to do to everything the block holds. */
   action?: React.ReactNode
+  /** 0–1 while the project is still being read: the block stays folded and shows a bar instead. */
+  loading?: number | null
   /** Set when the block itself is one end of a wire, as the Data Marts block is for the exits. */
   id?: string
   lit?: boolean
@@ -40,7 +43,20 @@ export function Block({
         </span>
         {toolbar && <div className="dm-band-tools">{toolbar}</div>}
       </header>
-      <div className="dm-band-grid">{children}</div>
+      {loading === null || loading === undefined ? (
+        <div className="dm-band-grid">{children}</div>
+      ) : (
+        <div
+          className="dm-loadbar"
+          role="progressbar"
+          aria-label="Reading the project"
+          aria-valuenow={Math.round(loading * 100)}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        >
+          <span style={{ width: `${Math.round(loading * 100)}%` }} />
+        </div>
+      )}
     </section>
   )
 }

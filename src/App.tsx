@@ -160,6 +160,15 @@ type Page = {
   checking: boolean
 }
 
+/**
+ * How far the read has got, or `null` once it is done.
+ *
+ * Every block unfolds together because every card needs the wires, and the wires need the last
+ * read: a block showing cards while another still cannot draw its lines would be a page that
+ * looks finished and is not.
+ */
+const reading = (pending: Progress | null) => (pending ? pending.done / pending.total : null)
+
 /** The shape of a project nothing has been read from yet, so the blocks can be drawn at once. */
 const NOTHING_YET: Model = {
   sources: [],
@@ -462,6 +471,7 @@ function SourcesBlock({ state, ctx, model, sourceCards, pending }: Page) {
       icon={Plug}
       title="Sources"
       count={pending?.counts.sources ?? model.sources.length}
+      loading={reading(pending)}
       hint="Input sources behind the connector data marts below. One card per source, badged with how many data marts it feeds."
     >
       {sourceCards.items.map(source => (
@@ -507,6 +517,7 @@ function DataMartsBlock({ state, ctx, model, marts, martCards, martSearch, setMa
       icon={Box}
       title="Data Marts"
       count={pending?.counts.marts ?? marts.length}
+      loading={reading(pending)}
       action={<RecheckButton onRecheck={onRecheck} checking={checking} />}
       hint={`Ordered by how much depends on them, ${PAGE} at a time. A dashed line is a relationship — a join between two marts; selecting one brings the marts it joins onto the page.`}
       toolbar={
@@ -558,6 +569,7 @@ function DestinationsBlock({ state, ctx, model, destinations, destinationCards, 
       icon={ArchiveRestore}
       title="Destinations"
       count={pending?.counts.destinations ?? destinations.length}
+      loading={reading(pending)}
       hint="Where the reports go, badged with how many write to each. Claude, ChatGPT and the API are ways out that no endpoint lists — select them, or follow the link in the corner."
       toolbar={
         <MultiSelect
@@ -634,6 +646,7 @@ function ReportsBlock({
       icon={FileText}
       title={selectedTitle ? `Reports · ${selectedTitle}` : 'Reports'}
       count={pending?.counts.reports ?? reports.length}
+      loading={reading(pending)}
       hint={`The ${PAGE} most recently run reports. Select a data mart or a destination above and this block narrows to its reports.`}
       toolbar={
         <>
