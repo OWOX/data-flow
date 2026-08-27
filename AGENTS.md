@@ -24,10 +24,10 @@ about the OWOX plugin contract.
 
 ## Hosting
 
-Not GitHub Pages. `https://data-flow.dorland.keenetic.pro/` is KeenDNS in front of this Mac on
-port 8787; `npm run preview` (built) or `npm run dev` (live) both bind it, with `cors` and
-`allowedHosts` set in `vite.config.ts`. Keep `delivery.url` in `plugin.json` equal to that address,
-and keep `base: '/'` — the page sits at the domain root, not under a repo path.
+GitHub Pages, from a public repo. `.github/workflows/pages.yml` builds `main` and publishes `dist/`
+to `https://owox.github.io/data-flow/`. Keep `delivery.url` in `plugin.json` equal to that address,
+and keep `base: '/data-flow/'` in `vite.config.ts` — the page sits under the repo path, not the org
+root, so a bare `/` base 404s every asset.
 
 ## Develop
 
@@ -37,9 +37,8 @@ and keep `base: '/'` — the page sits at the domain root, not under a repo path
     npm run build          # -> dist/
 
 There is no standalone preview: `connect()` needs the real host handshake, so test by publishing a
-release to **Only me** and installing it in OWOX Data Marts. Serve the page with
-`npm run build && npm run preview` (what OWOX loads in production) or `npm run dev` (live reload,
-same URL) — both bind 8787.
+release to **Only me** and installing it in OWOX Data Marts.
 
 Release with `gh release create vX.Y.Z --target main --generate-notes`; OWOX reads `plugin.json`
-from the release commit.
+from the release commit, and takes versions from published, non-prerelease `MAJOR.MINOR.PATCH` tags.
+Publish the plugin itself once, with `owox-ctl plugins publish OWOX/data-flow --scope member`.
