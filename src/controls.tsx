@@ -47,7 +47,7 @@ export function Block({
         <div className="dm-band-grid">{children}</div>
       ) : (
         <div
-          className="dm-loadbar"
+          className={`dm-loadbar${loading >= 1 ? ' dm-loadbar-done' : ''}`}
           role="progressbar"
           aria-label="Reading the project"
           aria-valuenow={Math.round(loading * 100)}

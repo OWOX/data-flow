@@ -187,6 +187,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null)
   const [progress, setProgress] = useState<Progress | null>(null)
   const [checking, setChecking] = useState(false)
+  const [folded, setFolded] = useState(true)
 
   useEffect(() => {
     let live = true
@@ -195,7 +196,11 @@ export default function App() {
         document.documentElement.classList.toggle('dark', host.theme === 'dark')
         if (live) setCtx(host)
         const loaded = await loadModel(host, p => live && setProgress(p))
-        if (live) setModel(loaded)
+        if (!live) return
+        setModel(loaded)
+        // The bar turns green the moment it fills. Unfolding on that same frame would make the
+        // colour a thing nobody sees, so the blocks open just after it.
+        setTimeout(() => live && setFolded(false), 450)
       })
       .catch((e: unknown) => live && setError(e instanceof Error ? e.message : String(e)))
     return () => {
@@ -246,7 +251,7 @@ export default function App() {
           <Canvas
             ctx={ctx}
             model={model ?? NOTHING_YET}
-            pending={model ? null : progress}
+            pending={folded ? progress : null}
             onRecheck={onRecheck}
             checking={checking}
           />
@@ -275,13 +280,10 @@ function Canvas({
   const [limit, setLimit] = useState(PAGE)
   // Filters start with everything ticked rather than empty: an empty menu now means "none", which
   // is what unticking "Select all" asks for.
-  const [storages, setStorages] = useState(() => model.storages.map(storage => storage.title))
+  const [storages, setStorages] = useState<string[]>([])
   const [flags, setFlags] = useState(() => FLAGS.map(flag => flag.key))
   const [martSearch, setMartSearch] = useState('')
-  const [types, setTypes] = useState(() => [
-    ...model.destinationTypes.map(type => type.type),
-    ...EXIT_TYPES.map(row => row.type),
-  ])
+  const [types, setTypes] = useState<string[]>(() => EXIT_TYPES.map(row => row.type))
   const [reportSearch, setReportSearch] = useState('')
   const [reportFlags, setReportFlags] = useState(() => REPORT_FLAGS.map(flag => flag.key))
   const [reportLimit, setReportLimit] = useState(PAGE)
@@ -293,6 +295,18 @@ function Canvas({
    * Only a data mart, a destination, or clearing the selection re-aims the block.
    */
   const [scope, setScope] = useState<string | null>(null)
+  /**
+   * Storage and destination-type options do not exist until the project has been read, so they are
+   * ticked when they arrive rather than in `useState`, which runs against an empty project. Once
+   * seeded they are the reader's: a later re-read must not hand back the ones they unticked.
+   */
+  const seeded = useRef(false)
+  useEffect(() => {
+    if (seeded.current || model.storages.length + model.destinationTypes.length === 0) return
+    seeded.current = true
+    setStorages(model.storages.map(storage => storage.title))
+    setTypes([...model.destinationTypes.map(type => type.type), ...EXIT_TYPES.map(row => row.type)])
+  }, [model])
   const onPin = useCallback((id: string | null) => {
     setPinned(id)
     if (id === null || id.startsWith('dm-') || id.startsWith('dd-')) {
