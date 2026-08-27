@@ -3,7 +3,7 @@
 // Ported from owox.com's /admin/model canvas: an absolutely positioned SVG under the cards, one
 // bezier per wire, redrawn from the live element boxes whenever the grid reflows. Hovering a card
 // isolates it and its lines; clicking pins that state so the pointer can leave.
-import { useEffect, type RefObject } from 'react'
+import { useEffect, useRef, type RefObject } from 'react'
 import type { Wire } from './owox'
 
 const NS = 'http://www.w3.org/2000/svg'
@@ -78,6 +78,10 @@ export function useWires(
   pinned: string | null,
   onPin: (id: string | null) => void,
 ) {
+  // Survives the effect being rebuilt, so unpinning hands the highlight back to whatever the
+  // pointer is still resting on rather than going dark until it moves.
+  const hovered = useRef<string | null>(null)
+
   useEffect(() => {
     const canvas = canvasRef.current
     const svg = canvas?.querySelector<SVGSVGElement>('#wires')
@@ -152,14 +156,16 @@ export function useWires(
         path.classList.toggle('lit', Boolean(id) && (from === id || to === id || links.has(pair(from, to))))
       }
     }
-    if (pinned) focus(pinned)
+    focus(pinned ?? hovered.current)
 
     // A pinned card outranks the pointer: hovering elsewhere leaves it alone.
     const enter = (e: Event) => {
+      hovered.current = (e.target as HTMLElement).closest<HTMLElement>('[data-node]')?.id ?? null
       if (pinned) return
-      focus((e.target as HTMLElement).closest<HTMLElement>('[data-node]')?.id ?? null)
+      focus(hovered.current)
     }
     const leave = () => {
+      hovered.current = null
       if (!pinned) focus(null)
     }
     const click = (e: MouseEvent) => {
