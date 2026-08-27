@@ -210,6 +210,9 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
 .dm-node[data-tone='warn'] { --tone: var(--tone-warn); }
 .dm-node[data-tone='bad'] { --tone: var(--tone-bad); }
 .dm-node[data-tone='progress'] { --tone: var(--tone-progress); }
+/* A border paints four colours and a grey, so a notice is painted as the issue it is — the same
+   fold `qualityTone` makes, kept here so no tone can reach a card and silently come out grey. */
+.dm-node[data-tone='notice'] { --tone: var(--tone-warn); }
 
 /* Above the band header (5) and the lit band's outline (6): the quality and freshness bubbles open
    upward, and from the first row of cards they open into exactly that chrome. */
