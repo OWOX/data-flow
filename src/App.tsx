@@ -424,7 +424,7 @@ function DataMartsBlock({ state, ctx, model, marts, martCards, martSearch, setMa
       icon={Box}
       title="Data Marts"
       count={marts.length}
-      hint={`Published before draft, connector-based before the rest, then ordered by how much depends on them: joins in, joins out, reports. ${PAGE} at a time. A dashed line between two data marts is a relationship — a join OWOX knows how to make between them, drawn from the mart that holds the join to the one it points at. Quality and freshness sit along the bottom of each card. Selecting a mart brings the marts it joins onto the page, wherever they are in the list.`}
+      hint={`Ordered by how much depends on them, ${PAGE} at a time. A dashed line is a relationship — a join between two marts; selecting one brings the marts it joins onto the page.`}
       toolbar={
         <>
           <SearchBox value={martSearch} onChange={setMartSearch} label="Search data marts" />

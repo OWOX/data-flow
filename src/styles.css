@@ -287,7 +287,7 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
    the host's browser floor allows it. */
 .dm-mark-body { display: flex; flex-direction: column; gap: 0.125rem; top: auto; bottom: calc(100% + 0.5rem); max-width: 17rem; }
 .dm-mark-body > span:first-child { font-weight: 500; }
-.dm-mark:hover .dm-hint-body, .dm-mark:focus-visible .dm-hint-body { opacity: 0.95; visibility: visible; translate: 0 0; }
+.dm-mark:hover .dm-hint-body, .dm-mark:focus-visible .dm-hint-body { opacity: 1; visibility: visible; translate: 0 0; }
 .dm-run { font-size: 0.6875rem; }
 /* Loader2 is the host's running glyph, and it spins there. */
 .dm-spin { animation: dm-spin 1s linear infinite; }
