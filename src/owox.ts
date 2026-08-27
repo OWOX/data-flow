@@ -1,8 +1,8 @@
 // The project's data model, read out of OWOX: which sources feed which data marts, how those marts
 // join to each other, and which destinations and reports they end up in.
 //
-// Read-only — `list`/`getJson`, plus one batch POST that is a query (`data-quality/summaries` takes
-// ids and returns states; it changes nothing).
+// Read-only — `list`/`getJson`, plus two batch POSTs that are queries (`data-quality/summaries` and
+// `health-status` each take ids and return states; neither changes anything).
 import type { PluginContext } from '@owox/plugin-sdk'
 import type { OWOXDataMart } from '@owox/api-client'
 
