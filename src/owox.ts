@@ -1,8 +1,9 @@
 // The project's data model, read out of OWOX: which sources feed which data marts, how those marts
 // join to each other, and which destinations and reports they end up in.
 //
-// Read-only — `list`/`getJson`, plus two batch POSTs that are queries (`data-quality/summaries` and
-// `health-status` each take ids and return states; neither changes anything).
+// Read-only on open — `list`/`getJson`, plus two batch POSTs that are queries
+// (`data-quality/summaries` and `health-status` each take ids and return states). `recheck` below
+// is the one exception, and only a button press reaches it.
 import type { PluginContext } from '@owox/plugin-sdk'
 import { count } from './format.ts'
 import type { OWOXDataMart } from '@owox/api-client'
@@ -224,6 +225,32 @@ export type Progress = { done: number; total: number; found: string[] }
 
 /** The reads below, counted once so the bar cannot drift from the work. */
 const READS = 9
+
+/**
+ * The two checks the host runs from its own Actions menu, over every mart on the page.
+ *
+ * These are the only calls here that write: each starts real jobs that query the warehouse, so
+ * nothing runs them but a person pressing the button. Quality settles asynchronously — the marts
+ * come back QUEUED, then RUNNING — so the page re-reads itself until they stop moving.
+ */
+export async function recheck(ctx: PluginContext, ids: string[]) {
+  if (ids.length === 0) return
+  const [quality, freshness] = await Promise.allSettled([
+    ctx.owox.postJson('/api/data-marts/data-quality/runs/batch', { dataMartIds: ids }),
+    ctx.owox.postJson('/api/data-marts/data-last-updated/refresh', { ids }),
+  ])
+  // One check may be refused while the other is allowed; say so rather than failing both silently.
+  const refused = [
+    quality.status === 'rejected' ? 'quality' : '',
+    freshness.status === 'rejected' ? 'freshness' : '',
+  ].filter(Boolean)
+  if (refused.length === 2) throw new Error('Could not start either check')
+  if (refused.length === 1) throw new Error(`Could not start the ${refused[0]} check`)
+}
+
+/** A mart whose quality run has not finished, which is why the page keeps looking. */
+export const settling = (model: Model) =>
+  model.marts.some(m => m.quality?.state === 'QUEUED' || m.quality?.state === 'RUNNING')
 
 export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) => void): Promise<Model> {
   let done = 0

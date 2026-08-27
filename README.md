@@ -35,7 +35,12 @@ search — the lines redraw with the cards.
 🎯 **Reports in context.** Select a data mart or a destination and the Reports block narrows to just
 its reports.
 
-🔗 **Every card is a link.** The corner icon opens that mart, destination or report in OWOX.
+🔗 **Every card is a link.** The corner icon opens that mart, destination or report in OWOX, and a
+data mart's shield opens its Data Quality tab.
+
+🔄 **Check everything at once.** The button beside the Data Marts count runs Check Quality and
+Check Data Last Updated over every mart on the page, then watches the shields settle as the
+answers come back.
 
 Skip the hours of clicking through screens to reconstruct a lineage. Know the quality of the
 reports you're responsible for before the meeting, not during it.

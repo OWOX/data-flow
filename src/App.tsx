@@ -10,6 +10,7 @@ import {
   KeyRound,
   Layers,
   Plug,
+  RefreshCw,
   Sigma,
   Sparkles,
 } from 'lucide-react'
@@ -21,7 +22,9 @@ import { DESTINATION, EXIT, STORAGE, type Mark } from './icons'
 import {
   destId,
   loadModel,
+  recheck,
   reportId,
+  settling,
   sourceId,
   type Destination,
   type Mart,
@@ -151,6 +154,9 @@ type Page = {
   reportLimit: number
   setReportLimit: (value: number) => void
   state: CardState
+  /** Runs both host checks over every mart, then re-reads until quality stops moving. */
+  onRecheck: () => void
+  checking: boolean
 }
 
 export default function App() {
@@ -158,6 +164,7 @@ export default function App() {
   const [model, setModel] = useState<Model | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [progress, setProgress] = useState<Progress | null>(null)
+  const [checking, setChecking] = useState(false)
 
   useEffect(() => {
     let live = true
@@ -174,6 +181,34 @@ export default function App() {
     }
   }, [])
 
+  /**
+   * Ask the host to check everything, then watch it happen.
+   *
+   * A quality run is queued, not answered, so one re-read would only show it starting. The page
+   * keeps re-reading while any mart is still QUEUED or RUNNING — the shields spin meanwhile,
+   * which `qualityVisual` already draws — and stops the moment they settle or the tries run out.
+   */
+  const onRecheck = useCallback(async () => {
+    if (!ctx || checking) return
+    setChecking(true)
+    setError(null)
+    try {
+      await recheck(ctx, model?.marts.map(mart => mart.id) ?? [])
+      // ponytail: 20 tries at 3s is a minute of watching; a slower warehouse finishes off-screen
+      // and the next open shows it.
+      for (let tries = 0; tries < 20; tries++) {
+        const next = await loadModel(ctx)
+        setModel(next)
+        if (!settling(next)) break
+        await new Promise(wait => setTimeout(wait, 3000))
+      }
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setChecking(false)
+    }
+  }, [ctx, model, checking])
+
   return (
     <div className="dm-page">
       <header className="dm-page-header">
@@ -188,7 +223,7 @@ export default function App() {
         ) : !model || !ctx ? (
           <Loading progress={progress} />
         ) : (
-          <Canvas ctx={ctx} model={model} />
+          <Canvas ctx={ctx} model={model} onRecheck={onRecheck} checking={checking} />
         )}
       </main>
     </div>
@@ -214,7 +249,17 @@ function Loading({ progress }: { progress: Progress | null }) {
   )
 }
 
-function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
+function Canvas({
+  ctx,
+  model,
+  onRecheck,
+  checking,
+}: {
+  ctx: PluginContext
+  model: Model
+  onRecheck: () => void
+  checking: boolean
+}) {
   const canvas = useRef<HTMLDivElement>(null)
   const [pinned, setPinned] = useState<string | null>(null)
   const [limit, setLimit] = useState(PAGE)
@@ -380,6 +425,8 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
     reportLimit,
     setReportLimit,
     state,
+    onRecheck,
+    checking,
   }
 
   return (
@@ -437,7 +484,24 @@ function SourcesBlock({ state, ctx, model, sourceCards }: Page) {
   )
 }
 
-function DataMartsBlock({ state, ctx, model, marts, martCards, martSearch, setMartSearch, storages, setStorages, flags, setFlags, limit, setLimit }: Page) {
+/** Starts both host checks over every mart, and spins until they have answered. */
+function RecheckButton({ onRecheck, checking }: { onRecheck: () => void; checking: boolean }) {
+  const hint = 'Check Quality & Freshness'
+  return (
+    <button
+      type="button"
+      className="dm-band-action"
+      onClick={onRecheck}
+      disabled={checking}
+      title={checking ? 'Checking…' : hint}
+      aria-label={hint}
+    >
+      <RefreshCw size={14} className={checking ? 'dm-spin' : undefined} />
+    </button>
+  )
+}
+
+function DataMartsBlock({ state, ctx, model, marts, martCards, martSearch, setMartSearch, storages, setStorages, flags, setFlags, limit, setLimit, onRecheck, checking }: Page) {
   return (
     <Block
       id={MARTS}
@@ -445,6 +509,7 @@ function DataMartsBlock({ state, ctx, model, marts, martCards, martSearch, setMa
       icon={Box}
       title="Data Marts"
       count={marts.length}
+      action={<RecheckButton onRecheck={onRecheck} checking={checking} />}
       hint={`Ordered by how much depends on them, ${PAGE} at a time. A dashed line is a relationship — a join between two marts; selecting one brings the marts it joins onto the page.`}
       toolbar={
         <>

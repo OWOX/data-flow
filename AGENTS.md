@@ -12,10 +12,14 @@ about the OWOX plugin contract.
 
 ## This plugin
 
-- Read-only. It reads data marts, storages, destinations, `/api/connectors` and `/api/reports`,
-  and calls nothing that writes. Both POSTs — `/api/data-marts/data-quality/summaries` and
-  `/api/data-marts/health-status` — are batch queries: each takes ids and returns states. Do not add
-  create/update/delete calls without asking.
+- Read-only on open. Reading is data marts, storages, destinations, `/api/connectors` and
+  `/api/reports`, plus two batch POSTs that are queries — `/api/data-marts/data-quality/summaries`
+  and `/api/data-marts/health-status` each take ids and return states.
+- Two POSTs do write, and only when a person presses **Check Quality & Freshness** beside the Data
+  Marts count: `/api/data-marts/data-quality/runs/batch` and `/api/data-marts/data-last-updated/refresh`.
+  Both start jobs that query the warehouse, so they cost the project real money and must never be
+  called on load, on a timer, or as a retry. Do not add other create/update/delete calls without
+  asking.
 - Untyped endpoints are wrapped in `optional()` in `src/owox.ts`: a member who cannot read one loses
   that detail (field counts, quality, report lines), never the page.
 - The canvas layout — SVG wires under the cards, hover isolates, click pins — is a port of

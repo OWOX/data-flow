@@ -8,6 +8,7 @@ export function Block({
   count: total,
   hint,
   toolbar,
+  action,
   id,
   lit,
   children,
@@ -17,6 +18,8 @@ export function Block({
   count?: number
   hint: string
   toolbar?: React.ReactNode
+  /** Sits beside the count: something to do to everything the block holds. */
+  action?: React.ReactNode
   /** Set when the block itself is one end of a wire, as the Data Marts block is for the exits. */
   id?: string
   lit?: boolean
@@ -30,6 +33,7 @@ export function Block({
         </span>
         <h2 className="dm-band-title">{title}</h2>
         {total !== undefined && <span className="dm-badge dm-band-count">{total}</span>}
+        {action}
         <span className="dm-hint" tabIndex={0} role="note" aria-label={hint}>
           <Info size={14} />
           <span className="dm-hint-body">{hint}</span>
