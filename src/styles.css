@@ -23,7 +23,11 @@
 
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--background); color: var(--foreground); }
-.dm-page { min-height: 100vh; }
+/* A tooltip anchored on a right-hand card reaches past the content edge, and a hidden one is still
+   laid out — so without this the page carries a horizontal scrollbar with nothing hovered. `clip`
+   rather than `hidden`: hidden would make this a scroll container and take vertical scrolling with
+   it. The bubbles are clamped to fit below, so nothing is actually cut off. */
+.dm-page { min-height: 100vh; overflow-x: clip; }
 .dm-page-header { padding: 1.5rem 3rem; }
 .dm-page-header-title { margin: 0; font-size: 1.5rem; font-weight: 500; }
 .dm-page-content { padding: 0 3rem 3rem; }
@@ -78,7 +82,9 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
 }
 :root.dark .dm-band { background: color-mix(in oklab, white 4%, transparent); border-bottom-color: color-mix(in oklab, white 4%, transparent); }
 
-.dm-band-head { position: relative; z-index: 5; display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
+/* Wraps: the toolbar has a search box and three filter menus, and unwrapped they hold the header —
+   and so the whole band and its card grid — wider than a narrow viewport. */
+.dm-band-head { position: relative; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
 .dm-band-icon {
   display: inline-flex; align-items: center; justify-content: center;
   width: 1.75rem; height: 1.75rem; border-radius: 0.25rem;
@@ -93,7 +99,7 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
   background: color-mix(in oklab, var(--border) 75%, transparent);
 }
 :root.dark .dm-band-count { background: color-mix(in oklab, white 8%, transparent); }
-.dm-band-tools { display: flex; gap: 0.5rem; margin-left: auto; }
+.dm-band-tools { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-left: auto; }
 /* Wider than the 0.75rem it was: the lines between cards need room to be followed. */
 .dm-band-grid { display: grid; gap: 0.85rem; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); }
 .dm-empty { margin: 0; font-size: 0.8125rem; }
@@ -259,7 +265,12 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
 .dm-status { display: inline-flex; }
 /* A status glyph that explains itself, on the block hint's own bubble. */
 .dm-mark { position: relative; cursor: help; outline: none; }
-.dm-mark-body { display: flex; flex-direction: column; gap: 0.125rem; top: auto; bottom: calc(100% + 0.5rem); }
+/* Narrower than the block hint's 22rem: this one hangs off a card, and the rightmost column leaves
+   only the card's own width plus the page gutter before the viewport edge.
+   ponytail: a fixed clamp, so a bubble near the edge can still lose a few px to the clip above at
+   some widths. Anchor positioning with `position-try-fallbacks: flip-inline` is the upgrade, once
+   the host's browser floor allows it. */
+.dm-mark-body { display: flex; flex-direction: column; gap: 0.125rem; top: auto; bottom: calc(100% + 0.5rem); max-width: 17rem; }
 .dm-mark-body > span:first-child { font-weight: 500; }
 .dm-mark:hover .dm-hint-body, .dm-mark:focus-visible .dm-hint-body { opacity: 0.95; visibility: visible; translate: 0 0; }
 .dm-run { font-size: 0.6875rem; }
