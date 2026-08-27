@@ -4,14 +4,14 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { loadModel, qualityTone, tone, worst } from './owox.ts'
 
+const marts = [
+  { id: 'm1', title: 'Facebook ads', status: 'PUBLISHED', definitionType: 'CONNECTOR', connectorSourceName: 'FacebookAds', storage: { title: 'BigQuery', type: 'GOOGLE_BIGQUERY' }, availableForReporting: true, dataLastUpdated: { dataLastUpdatedAt: '2026-08-01T00:00:00Z', coverage: 'complete' } },
+  { id: 'm2', title: 'Facebook spend', status: 'DRAFT', definitionType: 'CONNECTOR', connectorSourceName: 'FacebookAds', storage: { title: 'BigQuery', type: 'GOOGLE_BIGQUERY' } },
+  { id: 'm3', title: 'Blend', status: 'PUBLISHED', definitionType: 'SQL', storage: { title: 'Athena', type: 'AWS_ATHENA' } },
+]
+
 const ctx = (over: Record<string, unknown> = {}) => {
-  const marts = [
-    { id: 'm1', title: 'Facebook ads', status: 'PUBLISHED', definitionType: 'CONNECTOR', connectorSourceName: 'FacebookAds', storage: { title: 'BigQuery', type: 'GOOGLE_BIGQUERY' }, availableForReporting: true, dataLastUpdated: { dataLastUpdatedAt: '2026-08-01T00:00:00Z', coverage: 'complete' } },
-    { id: 'm2', title: 'Facebook spend', status: 'DRAFT', definitionType: 'CONNECTOR', connectorSourceName: 'FacebookAds', storage: { title: 'BigQuery', type: 'GOOGLE_BIGQUERY' } },
-    { id: 'm3', title: 'Blend', status: 'PUBLISHED', definitionType: 'SQL', storage: { title: 'Athena', type: 'AWS_ATHENA' } },
-  ]
   const owox = {
-    dataMarts: { list: async () => marts },
     destinations: {
       list: async () => [
         { id: 'd1', title: 'Sheet A', type: 'GOOGLE_SHEETS' },
@@ -26,7 +26,10 @@ const ctx = (over: Record<string, unknown> = {}) => {
       getEdges: async () => [{ id: 'e1', sourceDataMartId: 'm3', targetDataMartId: 'm1', joinConditions: [] }],
     },
     getJson: async (path: string) =>
-      path === '/api/connectors'
+      // The mart list is paged here rather than by the SDK, for the `total` page one carries.
+      path === '/api/data-marts'
+        ? { items: marts, total: marts.length, nextOffset: null }
+        : path === '/api/connectors'
         ? [{ name: 'FacebookAds', title: 'Facebook Ads' }]
         : path === '/api/data-marts/scheduled-triggers'
         ? {
@@ -143,7 +146,10 @@ test('the whole graph: cards, order, badges and lines', async () => {
 test('an endpoint the member cannot read costs only its own detail', async () => {
   const model = await loadModel(
     ctx({
-      getJson: async () => {
+      // The mart list is the page: it is not wrapped in `optional()`, and losing it is an error
+      // rather than a thinner canvas. Every read that IS optional refuses here.
+      getJson: async (path: string) => {
+        if (path === '/api/data-marts') return { items: marts, total: marts.length, nextOffset: null }
         throw new Error('403')
       },
       postJson: async () => {

@@ -194,6 +194,30 @@ type Trigger = {
   triggerConfig?: { reportId?: string } | null
 }
 
+/**
+ * The data mart list, paged here rather than by the SDK.
+ *
+ * `/api/data-marts` is the one list in the API that says how many there are — page one carries
+ * `total` — and the SDK's own `list()` unwraps to a bare array, dropping it. Paging it here means
+ * the badge can show the real count from the first page, and the bar can fill as the rest arrive
+ * instead of jumping when the last one does.
+ */
+async function listMarts(ctx: PluginContext, report: (loaded: number, total: number) => void) {
+  const items: OWOXDataMart[] = []
+  let offset: number | undefined
+  for (;;) {
+    const page = await ctx.owox.getJson<{ items?: OWOXDataMart[]; total?: number; nextOffset?: number | null }>(
+      '/api/data-marts',
+      offset === undefined ? undefined : { offset: String(offset) },
+    )
+    items.push(...(page.items ?? []))
+    report(items.length, page.total ?? items.length)
+    // `nextOffset` is the API's own end-of-list signal, so no page ceiling has to stand in for it.
+    if (page.nextOffset === null || page.nextOffset === undefined) return items
+    offset = page.nextOffset
+  }
+}
+
 /** Field counts and join edges are both scoped to one storage at a time by the model-canvas route. */
 async function perStorage(ctx: PluginContext, storageIds: string[]) {
   const fields = new Map<string, number>()
@@ -201,12 +225,17 @@ async function perStorage(ctx: PluginContext, storageIds: string[]) {
 
   for (const storageId of storageIds) {
     await optional(async () => {
-      // ponytail: 50-page ceiling as a runaway guard; raise it if a storage ever holds more.
+      // This route reports its own `total`, so the loop stops on a number the API gave rather than
+      // on a ceiling picked here — and cannot run away if `nextOffset` ever fails to end.
       let offset: number | undefined
-      for (let page = 0; page < 50; page++) {
+      let seen = 0
+      let total = Infinity
+      while (seen < total) {
         const result = await ctx.owox.models.getDataMarts(storageId, offset)
         for (const node of result.items) fields.set(node.id, node.fieldCount)
-        if (result.nextOffset === null) break
+        seen += result.items.length
+        total = result.total
+        if (result.nextOffset === null || result.items.length === 0) break
         offset = result.nextOffset
       }
     }, undefined)
@@ -262,18 +291,30 @@ export const settling = (model: Model) =>
 
 export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) => void): Promise<Model> {
   let done = 0
+  /** How far through the one read that can report itself part-done, in 0–1 of a read. */
+  let paging = 0
   const counts: Progress['counts'] = {}
+  const emit = () => onProgress?.({ done: done + paging, total: READS, counts: { ...counts } })
   /** Report a read the moment it lands, rather than when the batch it rides in finishes. */
   const track = <T,>(work: Promise<T>, tally?: (value: T) => Partial<Progress['counts']>) =>
     work.then(value => {
       done += 1
       Object.assign(counts, tally?.(value))
-      onProgress?.({ done, total: READS, counts: { ...counts } })
+      emit()
       return value
     })
 
   const [dataMarts, destinations, storages] = await Promise.all([
-    track(ctx.owox.dataMarts.list(), m => ({ marts: m.length })),
+    // The count comes from page one; the bar fills as the pages after it arrive.
+    track(
+      listMarts(ctx, (loaded, total) => {
+        counts.marts = total
+        paging = total > 0 ? loaded / total : 1
+        emit()
+      }).finally(() => {
+        paging = 0
+      }),
+    ),
     track(ctx.owox.destinations.list(), d => ({ destinations: d.length })),
     optional(() => ctx.owox.storages.list(), [] as Awaited<ReturnType<typeof ctx.owox.storages.list>>),
   ])
