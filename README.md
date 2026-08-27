@@ -42,8 +42,7 @@ data mart's shield opens its Data Quality tab.
 Check Data Last Updated over every mart on the page, then watches the shields settle as the
 answers come back.
 
-Skip the hours of clicking through screens to reconstruct a lineage. Know the quality of the
-reports you're responsible for before the meeting, not during it.
+Skip hours of clicking through screens to reconstruct lineage. Know the quality of the reports you’re responsible for before someone asks about them.
 
 ## Zero setup
 
@@ -54,7 +53,7 @@ It stores nothing. It writes nothing.
 
 ## Install
 
-In OWOX Data Marts, add the plugin from its release and open **Data Flow** from the project menu.
+In the OWOX Data Marts plugin, pick **Data Flow** from the gallery.
 
 ---
 
