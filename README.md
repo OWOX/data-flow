@@ -5,7 +5,8 @@
 A read-only plugin for [OWOX Data Marts](https://docs.owox.com/): **Sources → Data Marts →
 Destinations → Reports**, drawn as cards with the lines that connect them.
 
-![Data Flow: sources, data marts, destinations and reports on one canvas, with the selected chain highlighted](docs/screenshot.png)
+<video src="https://github.com/OWOX/data-flow/raw/main/docs/product-video.mp4" controls muted playsinline
+  title="Data Flow: sources, data marts, destinations and reports on one canvas, with the selected chain highlighted"></video>
 
 ## The challenge
 
@@ -21,9 +22,11 @@ question.
 - 🗺️ **The whole picture, one screen.** Every source, mart, destination and report, and every line
   between them. Hover a card to isolate what it touches; click to pin it and follow the chain
   end to end — upstream to the source, downstream to the report.
-- 🚦 **Quality and freshness where you can see them.** Each data mart carries its quality state and
-  last-updated time, and the card border takes the worst of the two. Each report shows its last run
-  status and when it ran. A broken link in the chain is visible before anyone asks about it.
+- 🚦 **Quality and freshness where you can see them.** Each data mart carries its quality state —
+  which colours the card border, the way OWOX colours the block on its own Models page — and its
+  last-updated time beside it. Sources, destinations and reports take their colour from their runs
+  instead. Hover either mark on a mart to read what it found. A broken link in the chain is visible
+  before anyone asks about it.
 - 🔍 **Filters that answer real questions.** Marts without relationships. Drafts. Marts with errors.
   Marts nothing reports on. Reports without triggers. Filter by storage, by destination type, by
   search — the lines redraw with the cards.
