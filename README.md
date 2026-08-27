@@ -5,8 +5,7 @@
 A read-only plugin for [OWOX Data Marts](https://docs.owox.com/): **Sources → Data Marts →
 Destinations → Reports**, drawn as cards with the lines that connect them.
 
-<video src="https://github.com/OWOX/data-flow/raw/main/docs/product-video.mp4" controls muted playsinline
-  title="Data Flow: sources, data marts, destinations and reports on one canvas, with the selected chain highlighted"></video>
+[![Data Flow: sources, data marts, destinations and reports on one canvas, with the selected chain highlighted](docs/screenshot.png)](https://github.com/OWOX/data-flow/raw/main/docs/product-video.mp4)
 
 ## The challenge
 
