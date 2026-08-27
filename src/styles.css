@@ -198,13 +198,6 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
 
 /* --- cards -------------------------------------------------------------- */
 /* The OWOX palette's base ramp. Only the hues a run status can take are here. */
-.dm-loading { display: flex; flex-direction: column; gap: 0.625rem; }
-.dm-loading-title { margin: 0; font-size: 0.875rem; font-weight: 500; }
-.dm-loading-found { margin: 0; font-size: 0.75rem; }
-/* The bar fills as reads land, so it only ever moves forward and never guesses. */
-.dm-progress { height: 0.25rem; border-radius: 999px; background: var(--muted); overflow: hidden; }
-.dm-progress span { display: block; height: 100%; border-radius: inherit; background: var(--primary); transition: width 240ms ease-out; }
-
 .dm-node {
   --tone-ok: #6ABA5C;
   --tone-warn: #F5C344;
