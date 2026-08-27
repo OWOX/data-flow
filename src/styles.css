@@ -42,13 +42,23 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
 #wires { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 /* The layer ignores the pointer, but a line answers to it: hovering one names it, which a canvas
    where lines pass under cards badly needs. */
-#wires path { fill: none; stroke-linecap: round; transition: opacity 150ms; pointer-events: stroke; }
-#wires .source { stroke: var(--muted-foreground); stroke-width: 1; opacity: 0.3; }
-#wires .relationship { stroke: var(--muted-foreground); stroke-width: 1.25; opacity: 0.45; stroke-dasharray: 4 3; }
-#wires .report { stroke: var(--primary); stroke-width: 1.5; opacity: 0.45; }
-#wires .run { stroke: var(--muted-foreground); stroke-width: 1; opacity: 0.3; }
-/* A route nothing has ever run: kept off the canvas until its card is selected. */
-#wires .dormant { stroke: var(--primary); stroke-width: 1.5; stroke-dasharray: 2 4; opacity: 0; }
+/* The lines start hidden: a canvas of hundreds of cards is unreadable with every route drawn at
+   once. Hovering a card draws its own, clicking keeps them drawn. */
+#wires path {
+  fill: none; stroke-linecap: round; stroke-width: 1.5;
+  opacity: 0; transition: opacity 150ms;
+  pointer-events: stroke;
+}
+/* Blue crosses a block boundary — a source feeding a mart, a mart reaching a destination, a
+   destination running a report. Grey stays inside the Data Marts block: a join between two marts. */
+#wires .source, #wires .report, #wires .dormant, #wires .run { stroke: var(--primary); }
+#wires .relationship { stroke: var(--muted-foreground); }
+
+#wires path.lit { opacity: 1; }
+/* A route no report has ever run: drawn, but plainly not carrying anything. */
+#wires .dormant.lit { opacity: 0.45; }
+/* Direction, read from the card in hand: solid leaves it, dashed arrives at it. */
+#wires path.lit.inbound { stroke-dasharray: 5 4; }
 
 /* The block chrome OWOX itself uses for Storage / Input Source / Output schema: a light panel with
    a rounded icon tile beside the title, no shadow, a hairline under it. */
@@ -255,7 +265,5 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
    and every line, and never dimmed with them. */
 .dm-add, .dm-canvas.focused .dm-add { z-index: 4; opacity: 0.9; }
 .dm-add:hover, .dm-canvas.focused .dm-add:hover { opacity: 1; }
-.dm-canvas.focused #wires path { opacity: 0.06; }
-.dm-canvas.focused #wires path.dormant:not(.lit) { opacity: 0; }
-.dm-canvas.focused #wires path.lit { opacity: 1; stroke-width: 2; }
+.dm-canvas.focused #wires path.lit { stroke-width: 2; }
 .dm-node[aria-pressed='true'] { box-shadow: 0 0 0 2px var(--primary); }

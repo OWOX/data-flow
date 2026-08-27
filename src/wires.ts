@@ -153,7 +153,12 @@ export function useWires(
       for (const path of paths) {
         const from = path.dataset.from ?? ''
         const to = path.dataset.to ?? ''
-        path.classList.toggle('lit', Boolean(id) && (from === id || to === id || links.has(pair(from, to))))
+        const on = Boolean(id) && (from === id || to === id || links.has(pair(from, to)))
+        path.classList.toggle('lit', on)
+        // Direction is read from the card in hand: a line that leaves it is solid, one that
+        // arrives at it is dashed. A line lit through a chain touches neither end, and stays solid.
+        path.classList.toggle('outbound', on && from === id)
+        path.classList.toggle('inbound', on && to === id)
       }
     }
     focus(pinned ?? hovered.current)
