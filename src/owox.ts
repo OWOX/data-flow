@@ -44,6 +44,10 @@ export type Mart = {
   quality?: QualitySummary
   freshness?: Freshness
   triggers: number
+  /** Every project member can see it and report on it. */
+  sharedForReporting: boolean
+  /** Technical users who do not own it can edit it and manage its triggers. */
+  sharedForMaintenance: boolean
   inbound: number
   outbound: number
   reports: number
@@ -241,6 +245,8 @@ export async function loadModel(ctx: PluginContext): Promise<Model> {
         quality: qualityBy.get(m.id),
         freshness: (m.dataLastUpdated as Freshness | undefined) ?? undefined,
         triggers: m.triggersCount ?? 0,
+        sharedForReporting: m.availableForReporting === true,
+        sharedForMaintenance: m.availableForMaintenance === true,
         inbound: inbound.get(m.id) ?? 0,
         outbound: outbound.get(m.id) ?? 0,
         reports: reportsPerMart.get(m.id) ?? 0,

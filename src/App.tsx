@@ -51,6 +51,22 @@ const FLAGS: Array<{ key: string; facet: string; label: string; test: (mart: Mar
   { key: 'no-reports', facet: 'reports', label: 'Without reports', test: m => m.reports === 0 },
   { key: 'errors', facet: 'errors', label: 'With errors', test: m => m.errors },
   { key: 'no-errors', facet: 'errors', label: 'Without errors', test: m => !m.errors },
+  // OWOX's own words for these two: a mart everyone can report on, and one other technical users
+  // may maintain. They are independent of each other, so each gets its own facet.
+  { key: 'reporting', facet: 'reporting', label: 'Shared for reporting', test: m => m.sharedForReporting },
+  { key: 'no-reporting', facet: 'reporting', label: 'Not shared for reporting', test: m => !m.sharedForReporting },
+  {
+    key: 'maintenance',
+    facet: 'maintenance',
+    label: 'Shared for maintenance',
+    test: m => m.sharedForMaintenance,
+  },
+  {
+    key: 'no-maintenance',
+    facet: 'maintenance',
+    label: 'Not shared for maintenance',
+    test: m => !m.sharedForMaintenance,
+  },
 ]
 
 /**

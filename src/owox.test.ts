@@ -6,7 +6,7 @@ import { loadModel } from './owox.ts'
 
 const ctx = (over: Record<string, unknown> = {}) => {
   const marts = [
-    { id: 'm1', title: 'Facebook ads', status: 'PUBLISHED', definitionType: 'CONNECTOR', connectorSourceName: 'FacebookAds', storage: { title: 'BigQuery', type: 'GOOGLE_BIGQUERY' }, dataLastUpdated: { dataLastUpdatedAt: '2026-08-01T00:00:00Z', coverage: 'complete' } },
+    { id: 'm1', title: 'Facebook ads', status: 'PUBLISHED', definitionType: 'CONNECTOR', connectorSourceName: 'FacebookAds', storage: { title: 'BigQuery', type: 'GOOGLE_BIGQUERY' }, availableForReporting: true, dataLastUpdated: { dataLastUpdatedAt: '2026-08-01T00:00:00Z', coverage: 'complete' } },
     { id: 'm2', title: 'Facebook spend', status: 'DRAFT', definitionType: 'CONNECTOR', connectorSourceName: 'FacebookAds', storage: { title: 'BigQuery', type: 'GOOGLE_BIGQUERY' } },
     { id: 'm3', title: 'Blend', status: 'PUBLISHED', definitionType: 'SQL', storage: { title: 'Athena', type: 'AWS_ATHENA' } },
   ]
@@ -76,6 +76,11 @@ test('the whole graph: cards, order, badges and lines', async () => {
   assert.equal(model.marts[0].reports, 2)
   // PASSED quality, but a report that last ran with an error still marks the mart.
   assert.equal(model.marts[0].quality?.state, 'PASSED')
+  // Sharing is off unless OWOX says otherwise: a missing flag is not a shared data mart.
+  assert.deepEqual(
+    [model.marts[0].sharedForReporting, model.marts[0].sharedForMaintenance],
+    [true, false],
+  )
   assert.equal(model.marts[0].errors, true)
   assert.equal(model.marts[1].outbound, 1)
   assert.equal(model.marts[2].draft, true)
