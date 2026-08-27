@@ -18,20 +18,24 @@ question.
 
 ## What this gives you
 
-- 🗺️ **The whole picture, one screen.** Every source, mart, destination and report, and every line
-  between them. Hover a card to isolate what it touches; click to pin it and follow the chain
-  end to end — upstream to the source, downstream to the report.
-- 🚦 **Quality and freshness where you can see them.** Each data mart carries its quality state —
-  which colours the card border, the way OWOX colours the block on its own Models page — and its
-  last-updated time beside it. Sources, destinations and reports take their colour from their runs
-  instead. Hover either mark on a mart to read what it found. A broken link in the chain is visible
-  before anyone asks about it.
-- 🔍 **Filters that answer real questions.** Marts without relationships. Drafts. Marts with errors.
-  Marts nothing reports on. Reports without triggers. Filter by storage, by destination type, by
-  search — the lines redraw with the cards.
-- 🎯 **Reports in context.** Select a data mart or a destination and the Reports block narrows to just
-  its reports.
-- 🔗 **Every card is a link.** The corner icon opens that mart, destination or report in OWOX.
+🗺️ **The whole picture, one screen.** Every source, mart, destination and report, and every line
+between them. Hover a card to isolate what it touches; click to pin it and follow the chain
+end to end — upstream to the source, downstream to the report.
+
+🚦 **Quality and freshness where you can see them.** Each data mart carries its quality state —
+which colours the card border, the way OWOX colours the block on its own Models page — and its
+last-updated time beside it. Sources, destinations and reports take their colour from their runs
+instead. Hover either mark on a mart to read what it found. A broken link in the chain is visible
+before anyone asks about it.
+
+🔍 **Filters that answer real questions.** Marts without relationships. Drafts. Marts with errors.
+Marts nothing reports on. Reports without triggers. Filter by storage, by destination type, by
+search — the lines redraw with the cards.
+
+🎯 **Reports in context.** Select a data mart or a destination and the Reports block narrows to just
+its reports.
+
+🔗 **Every card is a link.** The corner icon opens that mart, destination or report in OWOX.
 
 Skip the hours of clicking through screens to reconstruct a lineage. Know the quality of the
 reports you're responsible for before the meeting, not during it.
