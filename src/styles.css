@@ -198,9 +198,13 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
 .dm-linkcard:hover { border-color: var(--muted-foreground); }
 .dm-linkcard .dm-logo { color: var(--foreground); }
 .dm-node:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--primary); }
-/* The card under the pointer thickens its own border to 2px — a ring the border's own colour, laid
-   outside the 1px it already has, so nothing shifts and only the selected card is blue. */
-.dm-node.lit:hover { box-shadow: 0 0 0 1px var(--border); }
+/* The card under the pointer takes a 2px border in the grey its relationship lines are drawn in —
+   the ring is laid outside the 1px it already has, so nothing shifts, and blue stays the mark of a
+   selection. */
+.dm-node.lit:hover {
+  border-color: var(--muted-foreground);
+  box-shadow: 0 0 0 1px var(--muted-foreground);
+}
 .dm-node-head { display: flex; align-items: center; gap: 0.5rem; }
 .dm-node-title { flex: 1; min-width: 0; font-size: 0.875rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dm-node-sub { font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
