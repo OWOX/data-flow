@@ -166,7 +166,7 @@ export default function App() {
   return (
     <div className="dm-page">
       <header className="dm-page-header">
-        <h1 className="dm-page-header-title">Model Canvas</h1>
+        <h1 className="dm-page-header-title">Data Flow</h1>
       </header>
       <main className="dm-page-content">
         {error ? (

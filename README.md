@@ -1,4 +1,4 @@
-# Model Canvas — OWOX Data Marts plugin
+# Data Flow — OWOX Data Marts plugin
 
 The project's data model on one page: **Sources** → **Data Marts** → **Destinations**, as cards with
 the lines that connect them. Hover a card to isolate what it touches, click to pin it. Read-only.

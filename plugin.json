@@ -1,6 +1,6 @@
 {
-  "name": "Model Canvas",
-  "description": "Read-only map of the Data Marts, storages and destinations visible to you.",
+  "name": "Data Flow",
+  "description": "Where this project's data comes from and where it goes: sources, data marts, destinations and reports, and the lines between them.",
   "delivery": {
     "type": "remote",
     "url": "https://model-canvas.dorland.keenetic.pro/"
