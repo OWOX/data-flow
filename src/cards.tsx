@@ -159,13 +159,14 @@ export function MoreCard({
   onMore: () => void
 }) {
   if (shown >= total) return null
+  const left = total - shown
   return (
     <button type="button" className="dm-node dm-add" onClick={onMore}>
       <ChevronDown size={18} />
-      <span>Load {Math.min(page, total - shown)} more</span>
-      <span className="dm-muted">
-        {shown} of {total}
-      </span>
+      <span>Load {Math.min(page, left).toLocaleString()} more</span>
+      {/* The count of what is still hidden, which the button's own number never repeats: on the
+          last page the two would be the same number twice. */}
+      {left > page && <span className="dm-muted">{left.toLocaleString()} left</span>}
     </button>
   )
 }
