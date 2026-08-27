@@ -146,7 +146,12 @@ export function MartCard({
       }
     >
       <div className="dm-node-foot">
-        <Mark tone={quality.tone} lines={[quality.label, qualityLine(quality.label), ...qualityChecks(mart.quality)]}>
+        <Mark
+          tone={quality.tone}
+          lines={[quality.label, qualityLine(quality.label), ...qualityChecks(mart.quality)]}
+          ctx={ctx}
+          to={`/ui/${ctx.projectId}/data-marts/${mart.id}/quality`}
+        >
           <QualityIcon size={14} className={quality.spin ? 'dm-spin' : undefined} />
         </Mark>
         {/* The host paints this one grey whatever it finds: coverage says how much was measured,
@@ -203,6 +208,7 @@ export function AppLink({
   to,
   className,
   title,
+  label,
   children,
 }: {
   ctx: PluginContext
@@ -210,6 +216,7 @@ export function AppLink({
   to: string
   className?: string
   title?: string
+  label?: string
   children: React.ReactNode
 }) {
   const inApp = to.startsWith('/')
@@ -218,6 +225,7 @@ export function AppLink({
       href={inApp ? `https://app.owox.com${to}` : to}
       className={className ?? 'dm-link'}
       title={title}
+      aria-label={label}
       target={inApp ? undefined : '_blank'}
       rel={inApp ? undefined : 'noreferrer'}
       onClick={e => {
@@ -243,15 +251,39 @@ export function Logo({ name, logo, icon: Icon }: { name?: string; logo?: string;
 }
 
 /** A status glyph that says what it means on hover, and does nothing when clicked. */
-function Mark({ tone, lines, children }: { tone: string; lines: string[]; children: React.ReactNode }) {
-  return (
-    <span className={`dm-status dm-mark dm-${tone}`} tabIndex={0} role="note" aria-label={lines.join('. ')}>
+function Mark({
+  tone,
+  lines,
+  ctx,
+  to,
+  children,
+}: {
+  tone: Tone
+  lines: string[]
+  /** Given both, the mark leads somewhere: the host opens it, and clicking no longer picks the card. */
+  ctx?: PluginContext
+  to?: string
+  children: React.ReactNode
+}) {
+  const className = `dm-status dm-mark dm-${tone}`
+  const label = lines.join('. ')
+  const body = (
+    <>
       {children}
       <span className="dm-hint-body dm-mark-body">
         {lines.map(line => (
           <span key={line}>{line}</span>
         ))}
       </span>
+    </>
+  )
+  return ctx && to ? (
+    <AppLink ctx={ctx} to={to} className={className} label={label}>
+      {body}
+    </AppLink>
+  ) : (
+    <span className={className} tabIndex={0} role="note" aria-label={label}>
+      {body}
     </span>
   )
 }

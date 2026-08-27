@@ -10,14 +10,14 @@ import {
   ShieldX,
 } from 'lucide-react'
 import type { Mark } from './icons'
-import type { Mart, QualitySummary, Report } from './owox'
+import type { Mart, QualitySummary, Report, Tone } from './owox'
 
 /**
  * The data quality status icon, straight out of the host's `getDataQualityStatusVisual` — same
  * shields, same labels, same tone per state, so a mart reads the same here as on its own canvas.
  */
-export function qualityVisual(summary?: QualitySummary) {
-  if (!summary) return { icon: Shield, tone: 'idle', label: 'Data quality: unknown', spin: false }
+export function qualityVisual(summary?: QualitySummary): { icon: Mark; tone: Tone; label: string; spin: boolean } {
+  if (!summary) return { icon: Shield, tone: 'idle', label: 'Unknown', spin: false }
   const severity =
     (summary.errorFindings ?? 0) > 0 || summary.highestSeverity === 'error'
       ? 'bad'
@@ -27,7 +27,7 @@ export function qualityVisual(summary?: QualitySummary) {
           ? 'notice'
           : null
 
-  const visual = (icon: Mark, tone: string, label: string, spin = false) => ({ icon, tone, label, spin })
+  const visual = (icon: Mark, tone: Tone, label: string, spin = false) => ({ icon, tone, label, spin })
 
   if (summary.state === 'CANCELLED') return visual(ShieldBan, 'idle', 'Cancelled')
   if ((summary.totalChecks ?? 0) > 0 && summary.notApplicableChecks === summary.totalChecks) {
@@ -126,6 +126,7 @@ const QUALITY: Record<string, string> = {
   'Run failed': 'Data Quality check failed',
   Restricted: 'Data Quality run restricted',
   Cancelled: 'Data Quality check cancelled',
+  Unknown: 'Data Quality could not be read',
 }
 
 export const qualityLine = (label: string) => QUALITY[label] ?? label

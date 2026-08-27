@@ -42,7 +42,7 @@ type Freshness = {
  *
  * `idle` is "nothing has run", which stays grey rather than claiming health either way.
  */
-export type Tone = 'ok' | 'warn' | 'bad' | 'progress' | 'idle'
+export type Tone = 'ok' | 'notice' | 'warn' | 'bad' | 'progress' | 'idle'
 
 /**
  * OWOX's own rule for the dot on its Data Marts list, applied to any set of run statuses.
@@ -57,13 +57,13 @@ export type Tone = 'ok' | 'warn' | 'bad' | 'progress' | 'idle'
  * A signal nothing has run yet carries no information, so it never outranks one that has and never
  * drags a healthy card down; a card is only grey when every signal on it is silent.
  */
-const RANK: Record<Tone, number> = { idle: 0, ok: 1, progress: 2, warn: 3, bad: 4 }
+const RANK: Record<Tone, number> = { idle: 0, ok: 1, notice: 2, progress: 3, warn: 4, bad: 5 }
 
 export const worst = (tones: Tone[]): Tone =>
   tones.reduce<Tone>((carried, next) => (RANK[next] > RANK[carried] ? next : carried), 'idle')
 
-/** Data quality speaks one tone this canvas does not colour: a notice is still an issue. */
-export const qualityTone = (t: string): Tone => (t === 'notice' ? 'warn' : (t as Tone))
+/** A border is painted in four colours and a grey, so a notice reads as what it is: an issue. */
+export const qualityTone = (t: Tone): Tone => (t === 'notice' ? 'warn' : t)
 
 export function tone(statuses: Array<string | undefined>): Tone {
   const seen = new Set(statuses.filter(Boolean))
@@ -99,7 +99,6 @@ export type Mart = {
   outbound: number
   reports: number
   errors: boolean
-  tone: Tone
 }
 
 export type DestinationType = { type: string; destinations: number }
@@ -179,13 +178,13 @@ type RawReport = {
   dataDestinationAccess?: { id?: string; title?: string; type?: string } | null
 }
 type QualityRow = { dataMartId: string; summary?: QualitySummary | null }
-/** The latest run of each kind, which is all the host's own status dot reads. */
-type HealthRow = {
-  dataMartId: string
-  connector?: { status?: string } | null
-  report?: { status?: string } | null
-  insight?: { status?: string } | null
-}
+/**
+ * The latest connector run per mart.
+ *
+ * The endpoint also returns the latest report and insight run. Nothing reads them: a mart's colour
+ * is its data quality, and a source's is the connectors that pull for it.
+ */
+type HealthRow = { dataMartId: string; connector?: { status?: string } | null }
 type Trigger = {
   type?: string
   isActive?: boolean
@@ -249,9 +248,6 @@ export async function loadModel(ctx: PluginContext): Promise<Model> {
     perStorage(ctx, storages.map(s => s.id)),
   ])
 
-  const healthBy = new Map(
-    (health.items ?? []).map(row => [row.dataMartId, [row.connector?.status, row.report?.status, row.insight?.status]]),
-  )
   const connectorRunBy = new Map((health.items ?? []).map(row => [row.dataMartId, row.connector?.status]))
 
   const connectorBy = new Map(connectors.map(c => [c.name, c]))
@@ -322,7 +318,6 @@ export async function loadModel(ctx: PluginContext): Promise<Model> {
         outbound: outbound.get(m.id) ?? 0,
         reports: reportsPerMart.get(m.id) ?? 0,
         errors: state === 'ISSUES' || state === 'EXECUTION_FAILED' || failingMarts.has(m.id),
-        tone: tone(healthBy.get(m.id) ?? []),
       }
     })
     .sort(order)

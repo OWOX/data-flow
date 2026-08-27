@@ -280,6 +280,9 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
 .dm-status { display: inline-flex; }
 /* A status glyph that explains itself, on the block hint's own bubble. */
 .dm-mark { position: relative; cursor: help; outline: none; }
+/* A mark that leads somewhere drops the link's underline; its tone still sets the colour, and
+   `a.dm-mark` must not restate that or it would outrank `.dm-ok` and friends. */
+a.dm-mark { cursor: pointer; text-decoration: none; }
 /* Narrower than the block hint's 22rem: this one hangs off a card, and the rightmost column leaves
    only the card's own width plus the page gutter before the viewport edge.
    ponytail: a fixed clamp, so a bubble near the edge can still lose a few px to the clip above at
