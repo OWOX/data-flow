@@ -8,6 +8,8 @@ export function Block({
   count: total,
   hint,
   toolbar,
+  id,
+  lit,
   children,
 }: {
   icon: Mark
@@ -15,10 +17,13 @@ export function Block({
   count?: number
   hint: string
   toolbar?: React.ReactNode
+  /** Set when the block itself is one end of a wire, as the Data Marts block is for the exits. */
+  id?: string
+  lit?: boolean
   children: React.ReactNode
 }) {
   return (
-    <section className="dm-band">
+    <section id={id} data-band={id === undefined ? undefined : ''} className={`dm-band${lit ? ' lit' : ''}`}>
       <header className="dm-band-head">
         <span className="dm-band-icon">
           <Icon size={18} />
@@ -74,6 +79,9 @@ export function MultiSelect({
 }) {
   if (options.length === 0) return null
   const all = selected.length === options.length
+  // "All" when everything is ticked, or when an empty menu is the one that constrains nothing.
+  const summary =
+    all || (selected.length === 0 && emptyMeans === 'all') ? 'All' : selected.length === 0 ? 'None' : selected.length
   const groupOf = (value: string) => options.find(option => option.value === value)?.group
 
   // "only" narrows within a facet and leaves the others alone; in a menu with no facets, that is
@@ -93,9 +101,7 @@ export function MultiSelect({
     <details className="dm-filter" name="dm-filter">
       <summary>
         {label}
-        <span className={all || selected.length === 0 ? 'dm-filter-all' : 'dm-filter-count'}>
-          {all || (selected.length === 0 && emptyMeans === 'all') ? 'All' : selected.length === 0 ? 'None' : selected.length}
-        </span>
+        <span className={typeof summary === 'string' ? 'dm-filter-all' : 'dm-filter-count'}>{summary}</span>
         <ChevronDown size={14} />
       </summary>
       <div className="dm-filter-menu">
@@ -140,5 +146,3 @@ export function MultiSelect({
     </details>
   )
 }
-
-/** The rest of a capped list. Never a wire endpoint, so no `data-node`. */

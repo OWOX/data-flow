@@ -80,18 +80,64 @@ export const reportName = (report: Report) =>
 
 export const runTone = (status?: string) => (status === 'ERROR' ? 'bad' : status === 'SUCCESS' ? 'ok' : 'idle')
 
-export function freshnessTone(mart: Mart) {
-  const coverage = mart.freshness?.coverage
-  if (!mart.freshness?.dataLastUpdatedAt || coverage === 'unavailable') return 'idle'
-  return coverage === 'partial' ? 'warn' : 'ok'
+/**
+ * What each coverage means, in the host's own words.
+ *
+ * Coverage says how much of the mart could be measured, never whether anything is wrong — which is
+ * why the host paints this clock one fixed grey and lets the tooltip do the talking.
+ */
+const COVERAGE: Record<string, string> = {
+  complete: 'All source tables were checked.',
+  partial: 'Some source tables could not be checked — the actual time can only be more recent.',
+  unavailable: 'The storage did not report when the source tables last changed.',
 }
 
-export function freshnessLabel(mart: Mart) {
-  const at = mart.freshness?.dataLastUpdatedAt
-  if (!at) return 'Freshness: unknown'
-  const coverage = mart.freshness?.coverage
-  return `Data last updated ${ago(at)}${coverage && coverage !== 'complete' ? ` (${coverage})` : ''}`
+/**
+ * The Data Last Updated tooltip, line by line.
+ *
+ * It is a measurement someone has to ask for rather than something every mart carries, so the
+ * common answer is that nobody has asked yet.
+ */
+export function freshnessLines(mart: Mart): string[] {
+  const { dataLastUpdatedAt, coverage, computedAt, sources } = mart.freshness ?? {}
+  if (!computedAt && !dataLastUpdatedAt) return ['Data Last Updated has not been checked yet.']
+  return [
+    dataLastUpdatedAt
+      ? `Source tables last changed: ${ago(dataLastUpdatedAt)}`
+      : 'The storage did not report a modification time.',
+    ...(computedAt ? [`Checked ${ago(computedAt)}`] : []),
+    ...(coverage && COVERAGE[coverage] ? [COVERAGE[coverage]] : []),
+    ...(sources ?? []).map(
+      source => `${source.table} — ${source.dataLastUpdatedAt ? ago(source.dataLastUpdatedAt) : (source.note ?? 'unknown')}`,
+    ),
+    'Reflects when source tables were written to, not which period the data covers.',
+  ]
 }
+
+/** The host's own sentence for each quality state, keyed by the label its icon already carries. */
+const QUALITY: Record<string, string> = {
+  'Never run': 'Data Quality has not been checked yet',
+  'All checks disabled': 'Data Quality checks are disabled',
+  'No applicable checks': 'No applicable Data Quality checks',
+  Queued: 'Data Quality check queued',
+  Running: 'Data Quality check running',
+  Passed: 'Data Quality checks passed',
+  'Issues found': 'Data Quality issues found',
+  'Run failed': 'Data Quality check failed',
+  Restricted: 'Data Quality run restricted',
+  Cancelled: 'Data Quality check cancelled',
+}
+
+export const qualityLine = (label: string) => QUALITY[label] ?? label
+
+/** How many of the mart's checks came back clean, when it has run enough to know. */
+export function qualityChecks(summary?: QualitySummary) {
+  const total = summary?.totalChecks ?? 0
+  if (total === 0 || summary?.passedChecks === undefined) return []
+  return [`${summary.passedChecks} of ${count(total, 'check')} passed`]
+}
+
+const RELATIVE = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
 
 /** "3 hours ago", from a timestamp — enough for a tooltip, without a date library. */
 export function ago(iso: string) {
@@ -108,7 +154,7 @@ export function ago(iso: string) {
   let value = seconds
   for (const [unit, span] of units) {
     if (Math.abs(value) < span) {
-      return new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' }).format(Math.round(value), unit)
+      return RELATIVE.format(Math.round(value), unit)
     }
     value /= span
   }

@@ -15,6 +15,7 @@ const MEANING: Record<Wire['kind'], string> = {
   report: 'Route: a report runs this data mart into that destination',
   dormant: 'Route never run: the report exists, but has never carried data',
   run: 'Destination → report: a report that writes to it',
+  exit: 'Every data mart in the project is readable here',
 }
 
 /** A wire is the same wire whichever end you name first. */
@@ -135,7 +136,9 @@ export function useWires(
     const observer = new ResizeObserver(layout)
     observer.observe(canvas)
 
-    const cards = () => canvas.querySelectorAll<HTMLElement>('[data-node]')
+    // A whole block can be one end of a wire, so it lights like a card — but it is not one, and
+    // the click handler still only ever selects `[data-node]`.
+    const cards = () => canvas.querySelectorAll<HTMLElement>('[data-node], [data-band]')
 
     /**
      * Hover lighting only.
@@ -179,8 +182,9 @@ export function useWires(
       if (target.closest('a, button, summary, input, label')) return
       const card = target.closest<HTMLElement>('[data-node]')
       if (card) onPin(card.id === pinned ? null : card.id)
-      // Clicking the page outside any block clears the selection.
-      else if (pinned && !target.closest('.dm-band')) onPin(null)
+      // Anything that is not a card clears the selection: the gaps between them, a block's own
+      // empty space, the page around them all.
+      else if (pinned) onPin(null)
     }
     const keydown = (e: KeyboardEvent) => {
       const card = (e.target as HTMLElement).closest<HTMLElement>('[data-node]')

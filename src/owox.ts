@@ -21,6 +21,7 @@ export type QualityState =
 export type QualitySummary = {
   state: QualityState
   totalChecks?: number
+  passedChecks?: number
   notApplicableChecks?: number
   noticeFindings?: number
   warningFindings?: number
@@ -28,9 +29,55 @@ export type QualitySummary = {
   highestSeverity?: 'notice' | 'warning' | 'error' | null
 }
 
-type Freshness = { dataLastUpdatedAt?: string | null; coverage?: 'complete' | 'partial' | 'unavailable' }
+/** What the host's own Data Last Updated tooltip reads, passed through as it arrives. */
+type Freshness = {
+  dataLastUpdatedAt?: string | null
+  coverage?: 'complete' | 'partial' | 'unavailable'
+  computedAt?: string | null
+  sources?: Array<{ table: string; dataLastUpdatedAt?: string | null; note?: string | null }>
+}
 
-export type Source = { key: string; name: string; logo?: string; marts: number }
+/**
+ * The colour a card carries, in the vocabulary the status icons already speak.
+ *
+ * `idle` is "nothing has run", which stays grey rather than claiming health either way.
+ */
+export type Tone = 'ok' | 'warn' | 'bad' | 'progress' | 'idle'
+
+/**
+ * OWOX's own rule for the dot on its Data Marts list, applied to any set of run statuses.
+ *
+ * All succeeded is green, all failed red, a mix amber, still-going blue, nothing at all grey. One
+ * function for every card: a data mart reads its three latest runs, a report its own last one, a
+ * destination the reports that write to it, a source the marts it feeds.
+ */
+/**
+ * Worst wins, and `idle` is not a verdict.
+ *
+ * A signal nothing has run yet carries no information, so it never outranks one that has and never
+ * drags a healthy card down; a card is only grey when every signal on it is silent.
+ */
+const RANK: Record<Tone, number> = { idle: 0, ok: 1, progress: 2, warn: 3, bad: 4 }
+
+export const worst = (tones: Tone[]): Tone =>
+  tones.reduce<Tone>((carried, next) => (RANK[next] > RANK[carried] ? next : carried), 'idle')
+
+/** Data quality speaks one tone this canvas does not colour: a notice is still an issue. */
+export const qualityTone = (t: string): Tone => (t === 'notice' ? 'warn' : (t as Tone))
+
+export function tone(statuses: Array<string | undefined>): Tone {
+  const seen = new Set(statuses.filter(Boolean))
+  if (seen.size === 0) return 'idle'
+  const ok = seen.has('SUCCESS')
+  const bad = seen.has('FAILED') || seen.has('ERROR')
+  const going = seen.has('PENDING') || seen.has('RUNNING')
+  if (going && !ok && !bad) return 'progress'
+  if (bad && !ok && !going) return 'bad'
+  if (ok && !bad && !going) return 'ok'
+  return 'warn'
+}
+
+export type Source = { key: string; name: string; logo?: string; marts: number; tone: Tone }
 
 export type Mart = {
   id: string
@@ -52,10 +99,11 @@ export type Mart = {
   outbound: number
   reports: number
   errors: boolean
+  tone: Tone
 }
 
 export type DestinationType = { type: string; destinations: number }
-export type Destination = { id: string; title: string; type: string; reports: number }
+export type Destination = { id: string; title: string; type: string; reports: number; tone: Tone }
 
 export type Report = {
   id: string
@@ -74,13 +122,14 @@ export type Report = {
   /** An output filter, applied after it — the placement OWOX leaves unset. */
   postJoin: number
   aggregations: number
+  tone: Tone
 }
 
 export type Wire = {
   from: string
   to: string
   /** `dormant` is a route that exists but has never carried data: drawn only when selected. */
-  kind: 'source' | 'relationship' | 'report' | 'dormant' | 'run'
+  kind: 'source' | 'relationship' | 'report' | 'dormant' | 'run' | 'exit'
 }
 
 export type Storage = { title: string; type: string; marts: number }
@@ -130,6 +179,13 @@ type RawReport = {
   dataDestinationAccess?: { id?: string; title?: string; type?: string } | null
 }
 type QualityRow = { dataMartId: string; summary?: QualitySummary | null }
+/** The latest run of each kind, which is all the host's own status dot reads. */
+type HealthRow = {
+  dataMartId: string
+  connector?: { status?: string } | null
+  report?: { status?: string } | null
+  insight?: { status?: string } | null
+}
 type Trigger = {
   type?: string
   isActive?: boolean
@@ -170,7 +226,7 @@ export async function loadModel(ctx: PluginContext): Promise<Model> {
     optional(() => ctx.owox.storages.list(), [] as Awaited<ReturnType<typeof ctx.owox.storages.list>>),
   ])
 
-  const [connectors, rawReports, triggers, quality, canvas] = await Promise.all([
+  const [connectors, rawReports, triggers, quality, health, canvas] = await Promise.all([
     optional(() => ctx.owox.getJson<Connector[]>('/api/connectors'), []),
     optional(() => ctx.owox.getJson<RawReport[]>('/api/reports'), []),
     optional(() => ctx.owox.getJson<{ triggers?: Trigger[] }>('/api/data-marts/scheduled-triggers'), {}),
@@ -181,8 +237,22 @@ export async function loadModel(ctx: PluginContext): Promise<Model> {
         }),
       {},
     ),
+    // One batch POST covers every mart's run health — the same call, and the same rule, behind
+    // the red/green dot on OWOX's own Data Marts list.
+    optional(
+      () =>
+        ctx.owox.postJson<{ items?: HealthRow[] }>('/api/data-marts/health-status', {
+          ids: dataMarts.map(m => m.id),
+        }),
+      {},
+    ),
     perStorage(ctx, storages.map(s => s.id)),
   ])
+
+  const healthBy = new Map(
+    (health.items ?? []).map(row => [row.dataMartId, [row.connector?.status, row.report?.status, row.insight?.status]]),
+  )
+  const connectorRunBy = new Map((health.items ?? []).map(row => [row.dataMartId, row.connector?.status]))
 
   const connectorBy = new Map(connectors.map(c => [c.name, c]))
   const qualityBy = new Map((quality.items ?? []).map(row => [row.dataMartId, row.summary ?? undefined]))
@@ -225,6 +295,7 @@ export async function loadModel(ctx: PluginContext): Promise<Model> {
     preJoin: report.filterConfig?.filter(rule => rule?.placement === 'pre-join').length ?? 0,
     postJoin: report.filterConfig?.filter(rule => rule?.placement !== 'pre-join').length ?? 0,
     aggregations: report.aggregationConfig?.length ?? 0,
+    tone: tone([report.lastRunStatus]),
   }))
   const reportsPerMart = tally(reports.map(r => r.martId))
   const reportsPerDestination = tally(reports.map(r => r.destinationId))
@@ -251,11 +322,19 @@ export async function loadModel(ctx: PluginContext): Promise<Model> {
         outbound: outbound.get(m.id) ?? 0,
         reports: reportsPerMart.get(m.id) ?? 0,
         errors: state === 'ISSUES' || state === 'EXECUTION_FAILED' || failingMarts.has(m.id),
+        tone: tone(healthBy.get(m.id) ?? []),
       }
     })
     .sort(order)
 
   const sources = new Map<string, Source>()
+  /**
+   * A source is as healthy as the connectors that pull from it.
+   *
+   * Only the connector run of each mart it feeds counts — a report failing downstream says nothing
+   * about the source — and the worst of them wins outright: one failed pull is a failed source.
+   */
+  const sourceRuns = new Map<string, Tone[]>()
   for (const mart of marts) {
     if (!mart.source) continue
     const connector = connectorBy.get(mart.source)
@@ -264,13 +343,26 @@ export async function loadModel(ctx: PluginContext): Promise<Model> {
       name: connector?.title || mart.source,
       logo: typeof connector?.logo === 'string' ? connector.logo : undefined,
       marts: 0,
+      tone: 'idle' as Tone,
     }
     source.marts += 1
     sources.set(mart.source, source)
+    sourceRuns.set(mart.source, [...(sourceRuns.get(mart.source) ?? []), tone([connectorRunBy.get(mart.id)])])
   }
+  for (const [key, source] of sources) source.tone = worst(sourceRuns.get(key) ?? [])
 
   // One card per destination type that actually has a destination behind it.
   const perType = tally(destinations.map(d => d.type))
+
+  // A destination is as healthy as the reports that write to it.
+  const destinationRuns = new Map<string, Array<string | undefined>>()
+  for (const report of reports) {
+    if (!report.destinationId) continue
+    destinationRuns.set(report.destinationId, [
+      ...(destinationRuns.get(report.destinationId) ?? []),
+      report.lastRunStatus,
+    ])
+  }
 
   const wires = drawWires(marts, sources, destinationBy, edges, reports)
   const chains = traceChains(marts, sources, destinationBy, reports)
@@ -280,7 +372,13 @@ export async function loadModel(ctx: PluginContext): Promise<Model> {
     marts,
     destinationTypes: [...perType].map(([type, destinations]) => ({ type, destinations })),
     destinations: destinations
-      .map(d => ({ id: d.id, title: d.title, type: d.type, reports: reportsPerDestination.get(d.id) ?? 0 }))
+      .map(d => ({
+        id: d.id,
+        title: d.title,
+        type: d.type,
+        reports: reportsPerDestination.get(d.id) ?? 0,
+        tone: tone(destinationRuns.get(d.id) ?? []),
+      }))
       .sort((a, b) => b.reports - a.reports || a.title.localeCompare(b.title)),
     reports: reports.sort((a, b) => (b.lastRunAt ?? '').localeCompare(a.lastRunAt ?? '')),
     storages: storageList(marts),

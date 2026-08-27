@@ -13,8 +13,8 @@ import {
 } from 'lucide-react'
 import type { PluginContext } from '@owox/plugin-sdk'
 import { KIND, type Mark } from './icons'
-import { count, freshnessLabel, freshnessTone, initials, qualityVisual } from './format'
-import { martId, type Mart } from './owox'
+import { count, freshnessLines, initials, qualityChecks, qualityLine, qualityVisual } from './format'
+import { martId, qualityTone, type Mart, type Tone } from './owox'
 import type { DragProps } from './reorder'
 
 /** What the page knows about the selection, which only the page can render without losing it. */
@@ -26,6 +26,7 @@ const cardClass = (id: string, state?: CardState, dragged?: string) =>
 export function NodeCard({
   ctx,
   id,
+  tone,
   mark,
   title,
   hint,
@@ -41,6 +42,8 @@ export function NodeCard({
 }: {
   ctx: PluginContext
   id: string
+  /** Colours the border the card takes when it is pointed at or selected. Absent reads as unknown. */
+  tone?: Tone
   drag?: DragProps
   mark?: React.ReactNode
   title: string
@@ -60,6 +63,7 @@ export function NodeCard({
     <article
       id={id}
       data-node
+      data-tone={tone}
       tabIndex={0}
       aria-pressed={state?.pinned === id}
       {...drag}
@@ -103,11 +107,16 @@ export function MartCard({
   const KindIcon = kind?.icon
   const quality = qualityVisual(mart.quality)
   const QualityIcon = quality.icon
+  // A data mart's border is its data quality, the way the host's own Models page paints a block.
+  // Staleness reaches it through the quality summary's `data_freshness` check rather than as a
+  // second opinion, and run health stays on the cards that have nothing else to say.
+  const tone = qualityTone(quality.tone)
 
   return (
     <NodeCard
       ctx={ctx}
       id={martId(mart.id)}
+      tone={tone}
       title={mart.title}
       link={`/ui/${ctx.projectId}/data-marts/${mart.id}`}
       linkTitle="Open this data mart"
@@ -137,12 +146,14 @@ export function MartCard({
       }
     >
       <div className="dm-node-foot">
-        <span className={`dm-status dm-${quality.tone}`} title={`Data quality: ${quality.label}`}>
+        <Mark tone={quality.tone} lines={[quality.label, qualityLine(quality.label), ...qualityChecks(mart.quality)]}>
           <QualityIcon size={14} className={quality.spin ? 'dm-spin' : undefined} />
-        </span>
-        <span className={`dm-status dm-${freshnessTone(mart)}`} title={freshnessLabel(mart)}>
+        </Mark>
+        {/* The host paints this one grey whatever it finds: coverage says how much was measured,
+            never that something is wrong. */}
+        <Mark tone="idle" lines={freshnessLines(mart)}>
           <History size={14} />
-        </span>
+        </Mark>
       </div>
     </NodeCard>
   )
@@ -227,6 +238,20 @@ export function Logo({ name, logo, icon: Icon }: { name?: string; logo?: string;
   return (
     <span className="dm-logo">
       {usable ? <img src={logo} alt="" width={16} height={16} /> : Icon ? <Icon size={16} /> : initials(name ?? '')}
+    </span>
+  )
+}
+
+/** A status glyph that says what it means on hover, and does nothing when clicked. */
+function Mark({ tone, lines, children }: { tone: string; lines: string[]; children: React.ReactNode }) {
+  return (
+    <span className={`dm-status dm-mark dm-${tone}`} tabIndex={0} role="note" aria-label={lines.join('. ')}>
+      {children}
+      <span className="dm-hint-body dm-mark-body">
+        {lines.map(line => (
+          <span key={line}>{line}</span>
+        ))}
+      </span>
     </span>
   )
 }

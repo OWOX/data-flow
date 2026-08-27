@@ -52,7 +52,7 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
 /* Blue crosses a block boundary — a source feeding a mart, a mart reaching a destination, a
    destination running a report. Grey stays inside the Data Marts block: a join between two marts. */
 #wires .source, #wires .report, #wires .dormant, #wires .run { stroke: var(--primary); }
-#wires .relationship { stroke: var(--muted-foreground); }
+#wires .relationship, #wires .exit { stroke: var(--muted-foreground); }
 
 #wires path.lit { opacity: 1; }
 /* A route no report has ever run: drawn, but plainly not carrying anything. */
@@ -62,6 +62,13 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
 
 /* The block chrome OWOX itself uses for Storage / Input Source / Output schema: a light panel with
    a rounded icon tile beside the title, no shadow, a hairline under it. */
+/* An exit reads the whole block, so the whole block answers: a 2px grey outline laid outside the
+   panel, drawn rather than in flow, so nothing on the page shifts when it appears. */
+.dm-band.lit::after {
+  content: ''; position: absolute; z-index: 6; inset: 0;
+  border: 2px solid var(--muted-foreground); border-radius: inherit;
+  pointer-events: none;
+}
 .dm-band {
   position: relative;
   border-radius: 0.375rem;
@@ -172,6 +179,20 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
 .dm-search input::-webkit-search-cancel-button { cursor: pointer; }
 
 /* --- cards -------------------------------------------------------------- */
+/* The OWOX palette's base ramp. Only the hues a run status can take are here. */
+.dm-node {
+  --tone-ok: #6ABA5C;
+  --tone-warn: #F5C344;
+  --tone-bad: #E15241;
+  --tone-progress: #4286DE;
+  /* Unknown stays the grey the card already used: nothing has run, so nothing is claimed. */
+  --tone: var(--muted-foreground);
+}
+.dm-node[data-tone='ok'] { --tone: var(--tone-ok); }
+.dm-node[data-tone='warn'] { --tone: var(--tone-warn); }
+.dm-node[data-tone='bad'] { --tone: var(--tone-bad); }
+.dm-node[data-tone='progress'] { --tone: var(--tone-progress); }
+
 .dm-node {
   position: relative; z-index: 2;
   display: flex; flex-direction: column; gap: 0.5rem;
@@ -198,12 +219,11 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
 .dm-linkcard:hover { border-color: var(--muted-foreground); }
 .dm-linkcard .dm-logo { color: var(--foreground); }
 .dm-node:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--primary); }
-/* The card under the pointer takes a 2px border in the grey its relationship lines are drawn in —
-   the ring is laid outside the 1px it already has, so nothing shifts, and blue stays the mark of a
-   selection. */
+/* The card under the pointer takes a 2px border in its own run-health colour — the ring is laid
+   outside the 1px it already has, so nothing shifts. A card nothing has run stays grey. */
 .dm-node.lit:hover {
-  border-color: var(--muted-foreground);
-  box-shadow: 0 0 0 1px var(--muted-foreground);
+  border-color: var(--tone);
+  box-shadow: 0 0 0 1px var(--tone);
 }
 .dm-node-head { display: flex; align-items: center; gap: 0.5rem; }
 .dm-node-title { flex: 1; min-width: 0; font-size: 0.875rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -237,6 +257,11 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
 /* Status glyphs sit on their own line so a long title above cannot push them out of alignment. */
 .dm-node-foot { display: flex; align-items: center; gap: 0.375rem; margin-top: auto; padding-top: 0.125rem; }
 .dm-status { display: inline-flex; }
+/* A status glyph that explains itself, on the block hint's own bubble. */
+.dm-mark { position: relative; cursor: help; outline: none; }
+.dm-mark-body { display: flex; flex-direction: column; gap: 0.125rem; top: auto; bottom: calc(100% + 0.5rem); }
+.dm-mark-body > span:first-child { font-weight: 500; }
+.dm-mark:hover .dm-hint-body, .dm-mark:focus-visible .dm-hint-body { opacity: 0.95; visibility: visible; translate: 0 0; }
 .dm-run { font-size: 0.6875rem; }
 /* Loader2 is the host's running glyph, and it spins there. */
 .dm-spin { animation: dm-spin 1s linear infinite; }
@@ -273,9 +298,17 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
 .dm-add, .dm-canvas.focused .dm-add { z-index: 4; opacity: 0.9; }
 .dm-add:hover, .dm-canvas.focused .dm-add:hover { opacity: 1; }
 .dm-canvas.focused #wires path.lit { stroke-width: 2; }
-/* Selected outranks hovered: pointing at the card you already chose does not turn it grey. */
+/* Selected outranks hovered, and reads as the same colour one ring thicker. */
 .dm-node[aria-pressed='true'],
 .dm-node[aria-pressed='true']:hover {
-  border-color: var(--border);
-  box-shadow: 0 0 0 2px var(--primary);
+  border-color: var(--tone);
+  box-shadow: 0 0 0 2px var(--tone);
+}
+/* A card with nothing to report still has to look chosen, so blue stays the mark of a selection
+   wherever a status has not claimed the border. */
+.dm-node[data-tone='idle'][aria-pressed='true'],
+.dm-node[data-tone='idle'][aria-pressed='true']:hover,
+.dm-node:not([data-tone])[aria-pressed='true'],
+.dm-node:not([data-tone])[aria-pressed='true']:hover {
+  --tone: var(--primary);
 }

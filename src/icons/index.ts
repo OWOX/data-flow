@@ -5,6 +5,8 @@ import { Asterisk, Code, Grip, Plug, Table } from 'lucide-react'
 import { AwsAthenaIcon } from './aws-athena-icon'
 import { AwsRedshiftIcon } from './aws-redshift-icon'
 import { AzureSynapseIcon } from './azure-synapse-icon'
+import { ChatGptIcon } from './chatgpt-icon'
+import { ClaudeIcon } from './claude-icon'
 import { DataStudioIcon } from './data-studio-icon'
 import { DatabricksIcon } from './databricks-icon'
 import { EmailIcon } from './email-icon'
@@ -39,6 +41,9 @@ export const DESTINATION: Record<string, { icon: Mark; label: string }> = {
   GOOGLE_CHAT: { icon: GoogleChatIcon, label: 'Google Chat' },
   ODATA: { icon: ODataIcon, label: 'OData' },
 }
+
+/** Ways out of OWOX that no endpoint lists, so no destination type names them either. */
+export const EXIT: Record<string, Mark> = { CLAUDE: ClaudeIcon, CHATGPT: ChatGptIcon }
 
 /** The host's own definition-type glyphs and names. */
 export const KIND: Record<string, { icon: Mark; label: string }> = {

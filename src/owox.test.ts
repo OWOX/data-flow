@@ -2,7 +2,7 @@
 // lines connect them. Run with `npm test` — node strips the types, so this needs no test framework.
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { loadModel } from './owox.ts'
+import { loadModel, qualityTone, tone, worst } from './owox.ts'
 
 const ctx = (over: Record<string, unknown> = {}) => {
   const marts = [
@@ -171,3 +171,44 @@ test('an endpoint the member cannot read costs only its own detail', async () =>
 })
 
 
+
+// The one rule every card's colour goes through, so a change to it cannot pass unnoticed.
+test('tone reads a set of run statuses the way the host does', () => {
+  assert.equal(tone([]), 'idle')
+  assert.equal(tone([undefined, undefined]), 'idle')
+  assert.equal(tone(['SUCCESS']), 'ok')
+  assert.equal(tone(['SUCCESS', 'SUCCESS']), 'ok')
+  assert.equal(tone(['FAILED']), 'bad')
+  assert.equal(tone(['ERROR']), 'bad')
+  assert.equal(tone(['SUCCESS', 'FAILED']), 'warn')
+  assert.equal(tone(['RUNNING']), 'progress')
+  assert.equal(tone(['PENDING', 'RUNNING']), 'progress')
+  // Anything still going alongside a settled run is a mix, not a clean state.
+  assert.equal(tone(['SUCCESS', 'RUNNING']), 'warn')
+  assert.equal(tone(['FAILED', 'RUNNING']), 'warn')
+  // A status nobody models is not a claim of health.
+  assert.equal(tone(['CANCELLED']), 'warn')
+})
+
+// Worst wins, and a signal that has never run is not a verdict either way.
+test('worst outranks by severity and ignores idle', () => {
+  assert.equal(worst([]), 'idle')
+  assert.equal(worst(['idle', 'idle']), 'idle')
+  // One failure carries the whole set: a source whose other connectors are fine is still red.
+  assert.equal(worst(['ok', 'ok', 'bad']), 'bad')
+  assert.equal(worst(['ok', 'warn']), 'warn')
+  assert.equal(worst(['ok', 'progress']), 'progress')
+  assert.equal(worst(['warn', 'progress']), 'warn')
+  // Silence never drags a healthy card down, nor lifts a failing one.
+  assert.equal(worst(['idle', 'ok']), 'ok')
+  assert.equal(worst(['idle', 'bad']), 'bad')
+  // The Sessions case: the run went fine, the data did not. Two signals only — staleness reaches
+  // this through the quality summary's own `data_freshness` check, not as a third opinion.
+  assert.equal(worst([tone(['SUCCESS']), qualityTone('warn')]), 'warn')
+  assert.equal(worst([tone(['SUCCESS']), qualityTone('notice')]), 'warn')
+  assert.equal(worst([tone(['SUCCESS']), qualityTone('bad')]), 'bad')
+  assert.equal(worst([tone(['SUCCESS']), qualityTone('ok')]), 'ok')
+  // Quality that has never run says nothing, so the run status stands alone.
+  assert.equal(worst([tone(['SUCCESS']), qualityTone('idle')]), 'ok')
+  assert.equal(worst([tone(['FAILED']), qualityTone('idle')]), 'bad')
+})

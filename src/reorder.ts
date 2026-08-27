@@ -90,10 +90,3 @@ export function useReorder<T>(items: T[], idOf: (item: T) => string): Cards<T> {
   // What the block is showing, in the order it is showing it: the wires redraw when this changes.
   return { items: ordered, dragProps, key: ordered.map(idOf).join(',') }
 }
-
-/**
- * A card that is one end of a wire.
- *
- * `link` is the only part of it that is clickable: anywhere else selects the card, because that is
- * what a card on this canvas is for.
- */

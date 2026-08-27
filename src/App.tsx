@@ -1,7 +1,6 @@
 import { connect, type PluginContext } from '@owox/plugin-sdk'
 import {
   ArchiveRestore,
-  Bot,
   Box,
   CalendarClock,
   Columns3,
@@ -18,7 +17,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AddCard, Logo, MartCard, MoreCard, NodeCard, RunIcon, type CardState } from './cards'
 import { ago, count, reportName, runTone, scheduleLabel } from './format'
 import { Block, MultiSelect, SearchBox } from './controls'
-import { DESTINATION, STORAGE, type Mark } from './icons'
+import { DESTINATION, EXIT, STORAGE, type Mark } from './icons'
 import {
   destId,
   loadModel,
@@ -29,6 +28,7 @@ import {
   type Model,
   type Report,
   type Source,
+  type Wire,
 } from './owox'
 import { useReorder, type Cards } from './reorder'
 import { reach, useWires } from './wires'
@@ -79,7 +79,7 @@ const EXITS: Array<{ id: string; type: string; icon: Mark; title: string; note: 
   {
     id: 'x-claude',
     type: 'AI',
-    icon: Sparkles,
+    icon: EXIT.CLAUDE,
     title: 'Claude',
     note: 'OWOX Data Marts connector',
     to: 'https://claude.ai/directory/owox-data-marts',
@@ -87,7 +87,7 @@ const EXITS: Array<{ id: string; type: string; icon: Mark; title: string; note: 
   {
     id: 'x-chatgpt',
     type: 'AI',
-    icon: Bot,
+    icon: EXIT.CHATGPT,
     title: 'ChatGPT',
     note: 'OWOX Data Marts app',
     to: 'https://chatgpt.com/plugins/plugin_asdk_app_6a3e81be8f8481918e1e2cd1d7ea09c4',
@@ -103,6 +103,15 @@ const EXIT_TYPES = [
 
 const FACETS = [...new Set(FLAGS.map(flag => flag.facet))]
 
+/**
+ * The Data Marts block itself, as one end of a wire.
+ *
+ * An exit reads every data mart in the project, so drawing it a line per card would be fifty lines
+ * saying one thing. It gets one line to the block, and the block takes a border.
+ */
+const MARTS = 'marts-block'
+const EXIT_WIRES: Wire[] = EXITS.map(exit => ({ from: exit.id, to: MARTS, kind: 'exit' }))
+
 /** The Reports block's own filter: the one thing about a report that is not on its card's face. */
 const REPORT_FLAGS: Array<{ key: string; label: string; test: (report: Report) => boolean }> = [
   { key: 'triggers', label: 'With triggers', test: report => (report.schedule?.total ?? 0) > 0 },
@@ -113,8 +122,6 @@ const REPORT_FLAGS: Array<{ key: string; label: string; test: (report: Report) =
 type Page = {
   ctx: PluginContext
   model: Model
-  createMart: string
-  apiKeys: string
   sourceCards: Cards<Source>
   marts: Mart[]
   martCards: Cards<Mart>
@@ -310,21 +317,20 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
   // cards are on the page, and in what order.
   // The pinned card and everything it lights are rendered, not toggled by hand: a filter, a search
   // or a drag re-renders the block, and would wipe anything written onto the DOM after the fact.
+  const wires = useMemo(() => [...model.wires, ...EXIT_WIRES], [model.wires])
   const state: CardState = useMemo(
-    () => ({ pinned, lit: pinned ? reach(model.wires, model.chains, pinned).lit : null }),
-    [pinned, model.wires, model.chains],
+    () => ({ pinned, lit: pinned ? reach(wires, model.chains, pinned).lit : null }),
+    [pinned, wires, model.chains],
   )
 
   const revision = [sourceCards, martCards, destinationCards, exitCards, reportCards]
     .map(block => block.key)
     .join('|')
-  useWires(canvas, model.wires, model.chains, revision, pinned, onPin)
+  useWires(canvas, wires, model.chains, revision, pinned, onPin)
 
   const page: Page = {
     ctx,
     model,
-    createMart: `/ui/${ctx.projectId}/data-marts/create`,
-    apiKeys: `/ui/${ctx.projectId}/me/api-keys`,
     sourceCards,
     marts,
     martCards,
@@ -384,139 +390,143 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
 
 function SourcesBlock({ state, ctx, model, sourceCards }: Page) {
   return (
-      <Block
-        icon={Plug}
-        title="Sources"
-        count={model.sources.length}
-        hint="Input sources behind the connector data marts below. One card per source, badged with how many data marts it feeds."
-      >
-        {sourceCards.items.map(source => (
-          <NodeCard
-            key={source.key}
-            ctx={ctx}
-            drag={sourceCards.dragProps(source)}
-            state={state}
-            id={sourceId(source.key)}
-            mark={<Logo name={source.name} logo={source.logo} />}
-            title={source.name}
-            hint={source.key}
-            badge={count(source.marts, 'data mart')}
-          />
-        ))}
-      </Block>
-  )
-}
-
-function DataMartsBlock({ state, ctx, model, marts, martCards, martSearch, setMartSearch, storages, setStorages, flags, setFlags, limit, setLimit, createMart }: Page) {
-  return (
-      <Block
-        icon={Box}
-        title="Data Marts"
-        count={marts.length}
-        hint={`Published before draft, connector-based before the rest, then ordered by how much depends on them: joins in, joins out, reports. ${PAGE} at a time. A dashed line between two data marts is a relationship — a join OWOX knows how to make between them, drawn from the mart that holds the join to the one it points at. Quality and freshness sit along the bottom of each card. Selecting a mart brings the marts it joins onto the page, wherever they are in the list.`}
-        toolbar={
-          <>
-            <SearchBox value={martSearch} onChange={setMartSearch} label="Search data marts" />
-            <MultiSelect
-              label="Storage"
-              options={model.storages.map(storage => ({
-                value: storage.title,
-                label: storage.title,
-                count: storage.marts,
-                icon: STORAGE[storage.type]?.icon ?? Database,
-              }))}
-              selected={storages}
-              onChange={next => {
-                setStorages(next)
-                setLimit(PAGE)
-              }}
-            />
-            <MultiSelect
-              label="Filter"
-              options={FLAGS.map(flag => ({ value: flag.key, label: flag.label, group: flag.facet }))}
-              emptyMeans="all"
-              selected={flags}
-              onChange={next => {
-                setFlags(next)
-                setLimit(PAGE)
-              }}
-            />
-          </>
-        }
-      >
-        {martCards.items.map(mart => (
-          <MartCard key={mart.id} ctx={ctx} mart={mart} drag={martCards.dragProps(mart)} state={state} />
-        ))}
-        <MoreCard
-          shown={Math.min(limit, marts.length)}
-          total={marts.length}
-          page={PAGE}
-          onMore={() => setLimit(limit + PAGE)}
+    <Block
+      icon={Plug}
+      title="Sources"
+      count={model.sources.length}
+      hint="Input sources behind the connector data marts below. One card per source, badged with how many data marts it feeds."
+    >
+      {sourceCards.items.map(source => (
+        <NodeCard
+          key={source.key}
+          ctx={ctx}
+          drag={sourceCards.dragProps(source)}
+          state={state}
+          id={sourceId(source.key)}
+          tone={source.tone}
+          mark={<Logo name={source.name} logo={source.logo} />}
+          title={source.name}
+          hint={source.key}
+          badge={count(source.marts, 'data mart')}
         />
-        <AddCard ctx={ctx} to={createMart} label="New data mart" />
-      </Block>
+      ))}
+    </Block>
   )
 }
 
-function DestinationsBlock({ state, ctx, model, destinations, destinationCards, exitCards, types, setTypes, apiKeys }: Page) {
+function DataMartsBlock({ state, ctx, model, marts, martCards, martSearch, setMartSearch, storages, setStorages, flags, setFlags, limit, setLimit }: Page) {
   return (
-      <Block
-        icon={ArchiveRestore}
-        title="Destinations"
-        count={destinations.length}
-        hint="Where the reports go, badged with how many write to each. Claude, ChatGPT and the API are ways out that no endpoint lists — select them, or follow the link in the corner."
-        toolbar={
+    <Block
+      id={MARTS}
+      lit={state.lit?.has(MARTS)}
+      icon={Box}
+      title="Data Marts"
+      count={marts.length}
+      hint={`Published before draft, connector-based before the rest, then ordered by how much depends on them: joins in, joins out, reports. ${PAGE} at a time. A dashed line between two data marts is a relationship — a join OWOX knows how to make between them, drawn from the mart that holds the join to the one it points at. Quality and freshness sit along the bottom of each card. Selecting a mart brings the marts it joins onto the page, wherever they are in the list.`}
+      toolbar={
+        <>
+          <SearchBox value={martSearch} onChange={setMartSearch} label="Search data marts" />
           <MultiSelect
-            label="Type"
-            options={[
-              ...model.destinationTypes.map(type => ({
-                value: type.type,
-                label: DESTINATION[type.type]?.label ?? type.type,
-                count: type.destinations,
-                icon: DESTINATION[type.type]?.icon ?? ArchiveRestore,
-              })),
-              ...EXIT_TYPES.map(row => ({
-                value: row.type,
-                label: row.label,
-                count: row.destinations,
-                icon: row.icon,
-              })),
-            ]}
-            selected={types}
-            onChange={setTypes}
+            label="Storage"
+            options={model.storages.map(storage => ({
+              value: storage.title,
+              label: storage.title,
+              count: storage.marts,
+              icon: STORAGE[storage.type]?.icon ?? Database,
+            }))}
+            selected={storages}
+            onChange={next => {
+              setStorages(next)
+              setLimit(PAGE)
+            }}
           />
-        }
-      >
-        {destinationCards.items.map(destination => (
-          <NodeCard
-            key={destination.id}
-            ctx={ctx}
-            drag={destinationCards.dragProps(destination)}
-            state={state}
-            id={destId(destination.id)}
-            mark={<Logo icon={DESTINATION[destination.type]?.icon ?? ArchiveRestore} />}
-            title={destination.title}
-            badge={count(destination.reports, 'report')}
-            link={`/ui/${ctx.projectId}/data-destinations?id=${destination.id}`}
-            linkTitle="Open this destination"
+          <MultiSelect
+            label="Filter"
+            options={FLAGS.map(flag => ({ value: flag.key, label: flag.label, group: flag.facet }))}
+            emptyMeans="all"
+            selected={flags}
+            onChange={next => {
+              setFlags(next)
+              setLimit(PAGE)
+            }}
           />
-        ))}
-        {exitCards.items.map(exit => (
-          <NodeCard
-            key={exit.id}
-            ctx={ctx}
-            drag={exitCards.dragProps(exit)}
-            state={state}
-            id={exit.id}
-            mark={<Logo icon={exit.icon} />}
-            title={exit.title}
-            note={exit.note}
-            link={exit.to || apiKeys}
-            linkTitle={`Open ${exit.title}`}
-          />
-        ))}
-        <AddCard ctx={ctx} to={`/ui/${ctx.projectId}/data-destinations`} label="New destination" />
-      </Block>
+        </>
+      }
+    >
+      {martCards.items.map(mart => (
+        <MartCard key={mart.id} ctx={ctx} mart={mart} drag={martCards.dragProps(mart)} state={state} />
+      ))}
+      <MoreCard
+        shown={Math.min(limit, marts.length)}
+        total={marts.length}
+        page={PAGE}
+        onMore={() => setLimit(limit + PAGE)}
+      />
+      <AddCard ctx={ctx} to={`/ui/${ctx.projectId}/data-marts/create`} label="New data mart" />
+    </Block>
+  )
+}
+
+function DestinationsBlock({ state, ctx, model, destinations, destinationCards, exitCards, types, setTypes }: Page) {
+  return (
+    <Block
+      icon={ArchiveRestore}
+      title="Destinations"
+      count={destinations.length}
+      hint="Where the reports go, badged with how many write to each. Claude, ChatGPT and the API are ways out that no endpoint lists — select them, or follow the link in the corner."
+      toolbar={
+        <MultiSelect
+          label="Type"
+          options={[
+            ...model.destinationTypes.map(type => ({
+              value: type.type,
+              label: DESTINATION[type.type]?.label ?? type.type,
+              count: type.destinations,
+              icon: DESTINATION[type.type]?.icon ?? ArchiveRestore,
+            })),
+            ...EXIT_TYPES.map(row => ({
+              value: row.type,
+              label: row.label,
+              count: row.destinations,
+              icon: row.icon,
+            })),
+          ]}
+          selected={types}
+          onChange={setTypes}
+        />
+      }
+    >
+      {destinationCards.items.map(destination => (
+        <NodeCard
+          key={destination.id}
+          ctx={ctx}
+          drag={destinationCards.dragProps(destination)}
+          state={state}
+          id={destId(destination.id)}
+          tone={destination.tone}
+          mark={<Logo icon={DESTINATION[destination.type]?.icon ?? ArchiveRestore} />}
+          title={destination.title}
+          badge={count(destination.reports, 'report')}
+          link={`/ui/${ctx.projectId}/data-destinations?id=${encodeURIComponent(destination.id)}`}
+          linkTitle="Open this destination"
+        />
+      ))}
+      {exitCards.items.map(exit => (
+        <NodeCard
+          key={exit.id}
+          ctx={ctx}
+          drag={exitCards.dragProps(exit)}
+          state={state}
+          id={exit.id}
+          mark={<Logo icon={exit.icon} />}
+          title={exit.title}
+          note={exit.note}
+          link={exit.to || `/ui/${ctx.projectId}/me/api-keys`}
+          linkTitle={`Open ${exit.title}`}
+        />
+      ))}
+      <AddCard ctx={ctx} to={`/ui/${ctx.projectId}/data-destinations`} label="New destination" />
+    </Block>
   )
 }
 
@@ -534,100 +544,101 @@ function ReportsBlock({
   setReportLimit,
 }: Page) {
   return (
-      <Block
-        icon={FileText}
-        title={selectedTitle ? `Reports · ${selectedTitle}` : 'Reports'}
-        count={reports.length}
-        hint={`The ${PAGE} most recently run reports. Select a data mart or a destination above and this block narrows to its reports.`}
-        toolbar={
-          <>
-            <SearchBox
-              value={reportSearch}
-              onChange={next => {
-                setReportSearch(next)
-                setReportLimit(PAGE)
-              }}
-              label="Search reports"
-            />
-            <MultiSelect
-              label="Filter"
-              options={REPORT_FLAGS.map(flag => ({ value: flag.key, label: flag.label }))}
-              emptyMeans="all"
-              selected={reportFlags}
-              onChange={next => {
-                setReportFlags(next)
-                setReportLimit(PAGE)
-              }}
-            />
-          </>
-        }
-      >
-        {reportCards.items.map(report => (
-          <NodeCard
-            key={report.id}
-            ctx={ctx}
-            drag={reportCards.dragProps(report)}
-            state={state}
-            id={reportId(report.id)}
-            title={reportName(report)}
-            link={
-              report.martId
-                ? `/ui/${ctx.projectId}/data-marts/${report.martId}/reports?reportId=${report.id}`
-                : undefined
-            }
-            linkTitle="Open this report"
-          >
-            <div className="dm-badges">
-              {/* No column picked means every reportable field, which is not a number this page
-                  can put on the badge without asking the data mart for its schema. */}
-              {report.columns > 0 && (
-                <span className="dm-badge" title={`${count(report.columns, 'column')} in the output`}>
-                  <Columns3 size={12} />
-                </span>
-              )}
-              {report.schedule && (
-                <span
-                  className={`dm-badge${report.schedule.active === 0 ? ' dm-badge-off' : ''}`}
-                  title={scheduleLabel(report.schedule)}
-                >
-                  <CalendarClock size={12} />
-                </span>
-              )}
-              {report.preJoin > 0 && (
-                <span className="dm-badge" title={`Pre-join filter (slice) — ${count(report.preJoin, 'rule')}`}>
-                  <Layers size={12} />
-                </span>
-              )}
-              {report.postJoin > 0 && (
-                <span className="dm-badge" title={`Output filter — ${count(report.postJoin, 'rule')}`}>
-                  <Filter size={12} />
-                </span>
-              )}
-              {report.aggregations > 0 && (
-                <span className="dm-badge" title={count(report.aggregations, 'aggregated column')}>
-                  <Sigma size={12} />
-                </span>
-              )}
-            </div>
-            <div className="dm-node-foot">
-              <span className={`dm-status dm-${runTone(report.lastRunStatus)}`} title={report.lastRunStatus}>
-                <RunIcon status={report.lastRunStatus} />
+    <Block
+      icon={FileText}
+      title={selectedTitle ? `Reports · ${selectedTitle}` : 'Reports'}
+      count={reports.length}
+      hint={`The ${PAGE} most recently run reports. Select a data mart or a destination above and this block narrows to its reports.`}
+      toolbar={
+        <>
+          <SearchBox
+            value={reportSearch}
+            onChange={next => {
+              setReportSearch(next)
+              setReportLimit(PAGE)
+            }}
+            label="Search reports"
+          />
+          <MultiSelect
+            label="Filter"
+            options={REPORT_FLAGS.map(flag => ({ value: flag.key, label: flag.label }))}
+            emptyMeans="all"
+            selected={reportFlags}
+            onChange={next => {
+              setReportFlags(next)
+              setReportLimit(PAGE)
+            }}
+          />
+        </>
+      }
+    >
+      {reportCards.items.map(report => (
+        <NodeCard
+          key={report.id}
+          ctx={ctx}
+          drag={reportCards.dragProps(report)}
+          state={state}
+          id={reportId(report.id)}
+          tone={report.tone}
+          title={reportName(report)}
+          link={
+            report.martId
+              ? `/ui/${ctx.projectId}/data-marts/${report.martId}/reports?reportId=${encodeURIComponent(report.id)}`
+              : undefined
+          }
+          linkTitle="Open this report"
+        >
+          <div className="dm-badges">
+            {/* No column picked means every reportable field, which is not a number this page
+                can put on the badge without asking the data mart for its schema. */}
+            {report.columns > 0 && (
+              <span className="dm-badge" title={`${count(report.columns, 'column')} in the output`}>
+                <Columns3 size={12} />
               </span>
-              <span className="dm-muted dm-run">{report.lastRunAt ? ago(report.lastRunAt) : 'never run'}</span>
-            </div>
-          </NodeCard>
-        ))}
-        <MoreCard
-          shown={Math.min(reportLimit, reports.length)}
-          total={reports.length}
-          page={PAGE}
-          onMore={() => setReportLimit(reportLimit + PAGE)}
-        />
-        {reports.length === 0 && (
-          <p className="dm-muted dm-empty">
-            {selectedTitle ? 'Nothing here has reports.' : 'No reports in this project yet.'}
-          </p>
-        )}
-      </Block>
+            )}
+            {report.schedule && (
+              <span
+                className={`dm-badge${report.schedule.active === 0 ? ' dm-badge-off' : ''}`}
+                title={scheduleLabel(report.schedule)}
+              >
+                <CalendarClock size={12} />
+              </span>
+            )}
+            {report.preJoin > 0 && (
+              <span className="dm-badge" title={`Pre-join filter (slice) — ${count(report.preJoin, 'rule')}`}>
+                <Layers size={12} />
+              </span>
+            )}
+            {report.postJoin > 0 && (
+              <span className="dm-badge" title={`Output filter — ${count(report.postJoin, 'rule')}`}>
+                <Filter size={12} />
+              </span>
+            )}
+            {report.aggregations > 0 && (
+              <span className="dm-badge" title={count(report.aggregations, 'aggregated column')}>
+                <Sigma size={12} />
+              </span>
+            )}
+          </div>
+          <div className="dm-node-foot">
+            <span className={`dm-status dm-${runTone(report.lastRunStatus)}`} title={report.lastRunStatus}>
+              <RunIcon status={report.lastRunStatus} />
+            </span>
+            <span className="dm-muted dm-run">{report.lastRunAt ? ago(report.lastRunAt) : 'never run'}</span>
+          </div>
+        </NodeCard>
+      ))}
+      <MoreCard
+        shown={Math.min(reportLimit, reports.length)}
+        total={reports.length}
+        page={PAGE}
+        onMore={() => setReportLimit(reportLimit + PAGE)}
+      />
+      {reports.length === 0 && (
+        <p className="dm-muted dm-empty">
+          {selectedTitle ? 'Nothing here has reports.' : 'No reports in this project yet.'}
+        </p>
+      )}
+    </Block>
   )
 }
