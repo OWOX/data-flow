@@ -27,6 +27,7 @@ import {
   type Mart,
   type Model,
   type Report,
+  type Progress,
   type Source,
   type Wire,
 } from './owox'
@@ -156,6 +157,7 @@ export default function App() {
   const [ctx, setCtx] = useState<PluginContext | null>(null)
   const [model, setModel] = useState<Model | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [progress, setProgress] = useState<Progress | null>(null)
 
   useEffect(() => {
     let live = true
@@ -163,7 +165,7 @@ export default function App() {
       .then(async host => {
         document.documentElement.classList.toggle('dark', host.theme === 'dark')
         if (live) setCtx(host)
-        const loaded = await loadModel(host)
+        const loaded = await loadModel(host, p => live && setProgress(p))
         if (live) setModel(loaded)
       })
       .catch((e: unknown) => live && setError(e instanceof Error ? e.message : String(e)))
@@ -184,12 +186,31 @@ export default function App() {
             <p className="dm-muted">{error}</p>
           </section>
         ) : !model || !ctx ? (
-          <section className="dm-card dm-muted">Loading…</section>
+          <Loading progress={progress} />
         ) : (
           <Canvas ctx={ctx} model={model} />
         )}
       </main>
     </div>
+  )
+}
+
+/**
+ * What the page shows while it reads.
+ *
+ * The bar tracks reads that have actually landed, not a timer — nine of them, and each one that
+ * comes back with something to count says so, so the wait is spent watching the project arrive.
+ */
+function Loading({ progress }: { progress: Progress | null }) {
+  const { done = 0, total = 1, found = [] } = progress ?? {}
+  return (
+    <section className="dm-card dm-loading">
+      <p className="dm-loading-title">Reading the project…</p>
+      <div className="dm-progress" role="progressbar" aria-valuenow={done} aria-valuemin={0} aria-valuemax={total}>
+        <span style={{ width: `${Math.round((done / total) * 100)}%` }} />
+      </div>
+      <p className="dm-muted dm-loading-found">{found.join(' · ') || '\u00a0'}</p>
+    </section>
   )
 }
 

@@ -4,6 +4,7 @@
 // Read-only — `list`/`getJson`, plus two batch POSTs that are queries (`data-quality/summaries` and
 // `health-status` each take ids and return states; neither changes anything).
 import type { PluginContext } from '@owox/plugin-sdk'
+import { count } from './format.ts'
 import type { OWOXDataMart } from '@owox/api-client'
 
 export type QualityState =
@@ -218,34 +219,58 @@ async function perStorage(ctx: PluginContext, storageIds: string[]) {
   return { fields, edges }
 }
 
-export async function loadModel(ctx: PluginContext): Promise<Model> {
+/** What the page can say while it waits: how many reads have landed, and what they found. */
+export type Progress = { done: number; total: number; found: string[] }
+
+/** The reads below, counted once so the bar cannot drift from the work. */
+const READS = 9
+
+export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) => void): Promise<Model> {
+  let done = 0
+  const found: string[] = []
+  /** Report a read the moment it lands, rather than when the batch it rides in finishes. */
+  const track = <T,>(work: Promise<T>, describe?: (value: T) => string) =>
+    work.then(value => {
+      done += 1
+      if (describe) found.push(describe(value))
+      onProgress?.({ done, total: READS, found: [...found] })
+      return value
+    })
+
   const [dataMarts, destinations, storages] = await Promise.all([
-    ctx.owox.dataMarts.list(),
-    ctx.owox.destinations.list(),
-    optional(() => ctx.owox.storages.list(), [] as Awaited<ReturnType<typeof ctx.owox.storages.list>>),
+    track(ctx.owox.dataMarts.list(), m => count(m.length, 'data mart')),
+    track(ctx.owox.destinations.list(), d => count(d.length, 'destination')),
+    track(
+      optional(() => ctx.owox.storages.list(), [] as Awaited<ReturnType<typeof ctx.owox.storages.list>>),
+      s => count(s.length, 'storage'),
+    ),
   ])
 
   const [connectors, rawReports, triggers, quality, health, canvas] = await Promise.all([
-    optional(() => ctx.owox.getJson<Connector[]>('/api/connectors'), []),
-    optional(() => ctx.owox.getJson<RawReport[]>('/api/reports'), []),
-    optional(() => ctx.owox.getJson<{ triggers?: Trigger[] }>('/api/data-marts/scheduled-triggers'), {}),
-    optional(
-      () =>
-        ctx.owox.postJson<{ items?: QualityRow[] }>('/api/data-marts/data-quality/summaries', {
-          dataMartIds: dataMarts.map(m => m.id),
-        }),
-      {},
+    track(optional(() => ctx.owox.getJson<Connector[]>('/api/connectors'), []), c => count(c.length, 'source')),
+    track(optional(() => ctx.owox.getJson<RawReport[]>('/api/reports'), []), r => count(r.length, 'report')),
+    track(optional(() => ctx.owox.getJson<{ triggers?: Trigger[] }>('/api/data-marts/scheduled-triggers'), {})),
+    track(
+      optional(
+        () =>
+          ctx.owox.postJson<{ items?: QualityRow[] }>('/api/data-marts/data-quality/summaries', {
+            dataMartIds: dataMarts.map(m => m.id),
+          }),
+        {},
+      ),
     ),
     // One batch POST covers every mart's run health — the same call, and the same rule, behind
     // the red/green dot on OWOX's own Data Marts list.
-    optional(
-      () =>
-        ctx.owox.postJson<{ items?: HealthRow[] }>('/api/data-marts/health-status', {
-          ids: dataMarts.map(m => m.id),
-        }),
-      {},
+    track(
+      optional(
+        () =>
+          ctx.owox.postJson<{ items?: HealthRow[] }>('/api/data-marts/health-status', {
+            ids: dataMarts.map(m => m.id),
+          }),
+        {},
+      ),
     ),
-    perStorage(ctx, storages.map(s => s.id)),
+    track(perStorage(ctx, storages.map(s => s.id)), c => count(c.edges.length, 'relationship')),
   ])
 
   const connectorRunBy = new Map((health.items ?? []).map(row => [row.dataMartId, row.connector?.status]))
