@@ -18,18 +18,18 @@ question.
 
 ## What this gives you
 
-- **The whole picture, one screen.** Every source, mart, destination and report, and every line
+- 🗺️ **The whole picture, one screen.** Every source, mart, destination and report, and every line
   between them. Hover a card to isolate what it touches; click to pin it and follow the chain
   end to end — upstream to the source, downstream to the report.
-- **Quality and freshness where you can see them.** Each data mart carries its quality state and
+- 🚦 **Quality and freshness where you can see them.** Each data mart carries its quality state and
   last-updated time, and the card border takes the worst of the two. Each report shows its last run
   status and when it ran. A broken link in the chain is visible before anyone asks about it.
-- **Filters that answer real questions.** Marts without relationships. Drafts. Marts with errors.
+- 🔍 **Filters that answer real questions.** Marts without relationships. Drafts. Marts with errors.
   Marts nothing reports on. Reports without triggers. Filter by storage, by destination type, by
   search — the lines redraw with the cards.
-- **Reports in context.** Select a data mart or a destination and the Reports block narrows to just
+- 🎯 **Reports in context.** Select a data mart or a destination and the Reports block narrows to just
   its reports.
-- **Every card is a link.** The corner icon opens that mart, destination or report in OWOX.
+- 🔗 **Every card is a link.** The corner icon opens that mart, destination or report in OWOX.
 
 Skip the hours of clicking through screens to reconstruct a lineage. Know the quality of the
 reports you're responsible for before the meeting, not during it.
