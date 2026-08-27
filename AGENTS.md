@@ -24,7 +24,7 @@ about the OWOX plugin contract.
 
 ## Hosting
 
-Not GitHub Pages. `https://model-canvas.dorland.keenetic.pro/` is KeenDNS in front of this Mac on
+Not GitHub Pages. `https://data-flow.dorland.keenetic.pro/` is KeenDNS in front of this Mac on
 port 8787; `npm run preview` (built) or `npm run dev` (live) both bind it, with `cors` and
 `allowedHosts` set in `vite.config.ts`. Keep `delivery.url` in `plugin.json` equal to that address,
 and keep `base: '/'` — the page sits at the domain root, not under a repo path.

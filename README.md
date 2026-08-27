@@ -19,7 +19,7 @@ release to **Only me** and installing it in OWOX Data Marts.
 ## Deploy
 
 Served from this Mac, not GitHub Pages (private repo on a free org plan). KeenDNS terminates HTTPS
-for `https://model-canvas.dorland.keenetic.pro/` and proxies it to this host on **8787** — the same
+for `https://data-flow.dorland.keenetic.pro/` and proxies it to this host on **8787** — the same
 port `vite` pins for both commands:
 
     npm run build && npm run preview   # the built page, what OWOX loads in production

@@ -3,7 +3,8 @@ import { defineConfig } from 'vite'
 
 // This plugin's fixed public address: KeenDNS terminates HTTPS and proxies to this Mac on PORT.
 // delivery.url in plugin.json must match, and Vite must allow the Host header the tunnel sends.
-const TUNNEL_HOST = 'model-canvas.dorland.keenetic.pro'
+// The old name stays allowed while installations still point at it.
+const TUNNEL_HOSTS = ['data-flow.dorland.keenetic.pro', 'model-canvas.dorland.keenetic.pro']
 const PORT = 8787
 
 // The plugin iframe has an opaque origin, so even its own bundle is fetched cross-origin —
@@ -13,7 +14,7 @@ const server = {
   strictPort: true,
   host: true,
   cors: true,
-  allowedHosts: [TUNNEL_HOST],
+  allowedHosts: TUNNEL_HOSTS,
 }
 
 export default defineConfig({
