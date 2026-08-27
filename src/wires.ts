@@ -21,6 +21,39 @@ const MEANING: Record<Wire['kind'], string> = {
 const pair = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`)
 
 /**
+ * Every data mart a mart joins to, at any depth, and the relationships along the way.
+ *
+ * A join is worth following past its first hop: a mart two joins away is still reachable in a
+ * report, and a reader asking "what can this be blended with" means all of it, not the first ring.
+ */
+export function joins(wires: Wire[], id: string) {
+  const next = new Map<string, Array<{ other: string; key: string }>>()
+  for (const wire of wires) {
+    if (wire.kind !== 'relationship') continue
+    const key = pair(wire.from, wire.to)
+    for (const [a, b] of [
+      [wire.from, wire.to],
+      [wire.to, wire.from],
+    ]) {
+      next.set(a, [...(next.get(a) ?? []), { other: b, key }])
+    }
+  }
+
+  const nodes = new Set<string>([id])
+  const edges = new Set<string>()
+  const queue = [id]
+  while (queue.length > 0) {
+    for (const hop of next.get(queue.shift() as string) ?? []) {
+      edges.add(hop.key)
+      if (nodes.has(hop.other)) continue
+      nodes.add(hop.other)
+      queue.push(hop.other)
+    }
+  }
+  return { nodes, edges }
+}
+
+/**
  * What one card lights: its own wires, and every whole chain it sits on — so a report reaches up
  * through its destination to the data mart that feeds it, and on to that mart's source, without
  * lighting every other mart hanging off the same destination.
@@ -38,6 +71,12 @@ export function reach(wires: Wire[], chains: string[][], id: string) {
       lit.add(node)
       if (i > 0) links.add(pair(chain[i - 1], node))
     }
+  }
+  // A data mart lights everything it can be joined with, however many hops away.
+  if (id.startsWith('dm-')) {
+    const reachable = joins(wires, id)
+    for (const node of reachable.nodes) lit.add(node)
+    for (const edge of reachable.edges) links.add(edge)
   }
   return { lit, links }
 }

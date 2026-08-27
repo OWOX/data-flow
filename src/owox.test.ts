@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { loadModel } from './owox.ts'
+import { joins } from './wires.ts'
 
 const ctx = (over: Record<string, unknown> = {}) => {
   const marts = [
@@ -165,3 +166,17 @@ test('an endpoint the member cannot read costs only its own detail', async () =>
   assert.deepEqual(model.wires.map(w => w.kind), ['source', 'source'])
 })
 
+
+test('a join is followed past its first hop', async () => {
+  const wires = [
+    { from: 'dm-a', to: 'dm-b', kind: 'relationship' as const },
+    { from: 'dm-b', to: 'dm-c', kind: 'relationship' as const },
+    // A different island, and a line that is not a join, stay out of it.
+    { from: 'dm-x', to: 'dm-y', kind: 'relationship' as const },
+    { from: 'dm-a', to: 'dd-1', kind: 'report' as const },
+  ]
+
+  const { nodes, edges } = joins(wires, 'dm-a')
+  assert.deepEqual([...nodes].sort(), ['dm-a', 'dm-b', 'dm-c'])
+  assert.equal(edges.size, 2)
+})

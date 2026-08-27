@@ -31,7 +31,7 @@ import {
   type Source,
 } from './owox'
 import { useReorder, type Cards } from './reorder'
-import { reach, useWires } from './wires'
+import { joins, reach, useWires } from './wires'
 
 /** How many cards are on screen before the rest wait behind the block's "load more". */
 const PAGE = 25
@@ -268,10 +268,9 @@ function Canvas({ ctx, model }: { ctx: PluginContext; model: Model }) {
         .filter(id => id.startsWith('dm-'))
         .map(id => id.slice(3)),
     )
-    for (const wire of model.wires) {
-      if (wire.kind !== 'relationship') continue
-      if (wire.from === pinned) wanted.add(wire.to.slice(3))
-      if (wire.to === pinned) wanted.add(wire.from.slice(3))
+    // Every mart the selection can be joined with, at any depth, so the lines have somewhere to land.
+    if (pinned.startsWith('dm-')) {
+      for (const node of joins(model.wires, pinned).nodes) wanted.add(node.slice(3))
     }
     return [...page, ...model.marts.filter(mart => wanted.has(mart.id) && !on.has(mart.id))]
   }, [marts, limit, pinned, model.chains, model.wires, model.marts])
