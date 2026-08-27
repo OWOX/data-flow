@@ -49,6 +49,8 @@ const FLAGS: Array<{ key: string; facet: string; label: string; test: (mart: Mar
   { key: 'draft', facet: 'status', label: 'Draft', test: m => m.draft },
   { key: 'reports', facet: 'reports', label: 'With reports', test: m => m.reports > 0 },
   { key: 'no-reports', facet: 'reports', label: 'Without reports', test: m => m.reports === 0 },
+  { key: 'triggers', facet: 'triggers', label: 'With triggers', test: m => m.triggers > 0 },
+  { key: 'no-triggers', facet: 'triggers', label: 'Without triggers', test: m => m.triggers === 0 },
   { key: 'errors', facet: 'errors', label: 'With errors', test: m => m.errors },
   { key: 'no-errors', facet: 'errors', label: 'Without errors', test: m => !m.errors },
   // OWOX's own words for these two: a mart everyone can report on, and one other technical users
