@@ -111,6 +111,7 @@ export function MartCard({
   // Staleness reaches it through the quality summary's `data_freshness` check rather than as a
   // second opinion, and run health stays on the cards that have nothing else to say.
   const tone = qualityTone(quality.tone)
+  const freshness = freshnessLines(mart)
 
   return (
     <NodeCard
@@ -154,11 +155,13 @@ export function MartCard({
         >
           <QualityIcon size={14} className={quality.spin ? 'dm-spin' : undefined} />
         </Mark>
-        {/* The host paints this one grey whatever it finds: coverage says how much was measured,
-            never that something is wrong. */}
-        <Mark tone="idle" lines={freshnessLines(mart)}>
-          <History size={14} />
-        </Mark>
+        {/* Only once someone has measured it. The host paints this one grey whatever it finds:
+            coverage says how much was measured, never that something is wrong. */}
+        {freshness.length > 0 && (
+          <Mark tone="idle" lines={freshness}>
+            <History size={14} />
+          </Mark>
+        )}
       </div>
     </NodeCard>
   )

@@ -93,14 +93,15 @@ const COVERAGE: Record<string, string> = {
 }
 
 /**
- * The Data Last Updated tooltip, line by line.
+ * The Data Last Updated tooltip, line by line — and empty when there is nothing to tell.
  *
- * It is a measurement someone has to ask for rather than something every mart carries, so the
- * common answer is that nobody has asked yet.
+ * It is a measurement someone has to ask for rather than something every mart carries, so an
+ * unmeasured mart has no mark at all: an icon whose only word is "not checked yet" is a row of
+ * identical glyphs saying nothing.
  */
 export function freshnessLines(mart: Mart): string[] {
   const { dataLastUpdatedAt, coverage, computedAt, sources } = mart.freshness ?? {}
-  if (!computedAt && !dataLastUpdatedAt) return ['Data Last Updated has not been checked yet.']
+  if (!computedAt && !dataLastUpdatedAt) return []
   return [
     dataLastUpdatedAt
       ? `Source tables last changed: ${ago(dataLastUpdatedAt)}`
