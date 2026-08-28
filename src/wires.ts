@@ -28,15 +28,40 @@ const pair = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`)
  * through its destination to the data mart that feeds it, and on to that mart's source, without
  * lighting every other mart hanging off the same destination.
  */
+/**
+ * Which wires and chains touch each id, built once per model.
+ *
+ * `reach` runs on every hover, and scanning four thousand chains and four thousand wires each time
+ * is four thousand comparisons to find the handful that matter. The model's arrays are stable, so
+ * the index is keyed on them and outlives the hover.
+ */
+const indexed = new WeakMap<object, { by: Map<string, string[]>; chains: Map<string, string[][]> }>()
+
+function indexOf(wires: Wire[], chains: string[][]) {
+  let index = indexed.get(chains)
+  if (!index) {
+    const by = new Map<string, string[]>()
+    const add = (key: string, value: string) => by.set(key, [...(by.get(key) ?? []), value])
+    for (const wire of wires) {
+      add(wire.from, wire.to)
+      add(wire.to, wire.from)
+    }
+    const byChain = new Map<string, string[][]>()
+    for (const chain of chains) {
+      for (const node of new Set(chain)) byChain.set(node, [...(byChain.get(node) ?? []), chain])
+    }
+    index = { by, chains: byChain }
+    indexed.set(chains, index)
+  }
+  return index
+}
+
 export function reach(wires: Wire[], chains: string[][], id: string) {
+  const index = indexOf(wires, chains)
   const lit = new Set<string>([id])
   const links = new Set<string>()
-  for (const wire of wires) {
-    if (wire.from === id) lit.add(wire.to)
-    if (wire.to === id) lit.add(wire.from)
-  }
-  for (const chain of chains) {
-    if (!chain.includes(id)) continue
+  for (const other of index.by.get(id) ?? []) lit.add(other)
+  for (const chain of index.chains.get(id) ?? []) {
     for (const [i, node] of chain.entries()) {
       lit.add(node)
       if (i > 0) links.add(pair(chain[i - 1], node))
@@ -84,13 +109,21 @@ export function useWires(
   // Survives the effect being rebuilt, so unpinning hands the highlight back to whatever the
   // pointer is still resting on rather than going dark until it moves.
   const hovered = useRef<string | null>(null)
+  /**
+   * The drawn lines, kept across a selection change.
+   *
+   * Building them belongs to the set of cards on the page; lighting them belongs to what is
+   * chosen. Those were one effect, so every click destroyed and rebuilt every path — four and a
+   * half thousand elements on a large project, before anything could be drawn.
+   */
+  const drawn = useRef<SVGPathElement[]>([])
 
   useEffect(() => {
     const canvas = canvasRef.current
     const svg = canvas?.querySelector<SVGSVGElement>('#wires')
     if (!canvas || !svg) return
 
-    const paths = wires.map(wire => {
+    const paths = (drawn.current = wires.map(wire => {
       const path = document.createElementNS(NS, 'path')
       path.setAttribute('class', wire.kind)
       path.setAttribute('marker-end', 'url(#arrowhead)')
@@ -101,7 +134,7 @@ export function useWires(
       path.append(title)
       svg.append(path)
       return path
-    })
+    }))
 
     const neighbours = new Map<string, Set<string>>()
     const link = (a: string, b: string) => neighbours.set(a, (neighbours.get(a) ?? new Set()).add(b))
@@ -119,8 +152,11 @@ export function useWires(
        * than disappearing — the canvas stays connected, and folding hides detail without hiding
        * the shape. Read from the DOM each layout, since folding changes it.
        */
-      const bands = [...canvas.querySelectorAll<HTMLElement>('[data-band][data-holds]')].flatMap(band =>
-        (band.dataset.holds ?? '').split(',').map(prefix => [prefix, band] as const),
+      // Only a folded block stands in. A card that is merely past its block's page, or behind a
+      // filter, is not there to be drawn to — and treating those the same drew four thousand
+      // identical curves between two rectangles on a project with four thousand data marts.
+      const bands = [...canvas.querySelectorAll<HTMLElement>('[data-band][data-holds].folded')].flatMap(
+        band => (band.dataset.holds ?? '').split(',').map(prefix => [prefix, band] as const),
       )
       const standIn = (id: string) => bands.find(([prefix]) => id.startsWith(prefix))?.[1] ?? null
 
@@ -156,6 +192,17 @@ export function useWires(
 
     // A whole block can be one end of a wire, so it lights like a card — but it is not one, and
     // the click handler still only ever selects `[data-node]`.
+    return () => {
+      observer.disconnect()
+      for (const path of paths) path.remove()
+    }
+  }, [canvasRef, wires, revision])
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const paths = drawn.current
+
     const cards = () => canvas.querySelectorAll<HTMLElement>('[data-node], [data-band]')
 
     /**
@@ -170,15 +217,15 @@ export function useWires(
       const { lit, links } = id
         ? reach(wires, chains, id)
         : { lit: new Set<string>(), links: new Set<string>() }
+      // What is actually on the page, asked once rather than once per band per lit id.
+      const onPage = new Set([...canvas.querySelectorAll<HTMLElement>('[data-node]')].map(el => el.id))
       for (const el of cards()) {
         // A folded block stands in for the cards it holds, so it takes the border those cards
         // would have taken: the line ends somewhere visible, and says where.
-        const holds = el.dataset.holds?.split(',')
+        const holds = el.classList.contains('folded') ? el.dataset.holds?.split(',') : undefined
         const standsIn =
           holds !== undefined &&
-          [...lit].some(
-            node => holds.some(prefix => node.startsWith(prefix)) && !canvas.querySelector(`#${CSS.escape(node)}`),
-          )
+          [...lit].some(node => !onPage.has(node) && holds.some(prefix => node.startsWith(prefix)))
         el.classList.toggle('lit', lit.has(el.id) || standsIn)
       }
       for (const path of paths) {
@@ -232,14 +279,12 @@ export function useWires(
     document.addEventListener('keydown', keydown)
 
     return () => {
-      observer.disconnect()
       canvas.removeEventListener('pointerover', enter)
       canvas.removeEventListener('focusin', enter)
       canvas.removeEventListener('pointerleave', leave)
       document.removeEventListener('click', click)
       document.removeEventListener('keydown', keydown)
       canvas.classList.remove('focused')
-      for (const path of paths) path.remove()
     }
   }, [canvasRef, wires, chains, revision, pinned, onPin])
 }
