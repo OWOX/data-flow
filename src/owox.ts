@@ -300,11 +300,11 @@ async function perStorage(
 export type Progress = {
   done: number
   total: number
-  counts: { sources?: number; marts?: number; destinations?: number; reports?: number }
+  counts: { sources?: number; storages?: number; marts?: number; destinations?: number; reports?: number }
 }
 
 /** The reads below, counted once so the bar cannot drift from the work. */
-const READS = 8
+const READS = 9
 
 /**
  * The two checks the host runs from its own Actions menu, over every mart on the page.
@@ -360,7 +360,10 @@ export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) =
       }),
     ),
     track(ctx.owox.destinations.list(), d => ({ destinations: d.length })),
-    optional(() => ctx.owox.storages.list(), [] as Awaited<ReturnType<typeof ctx.owox.storages.list>>),
+    track(
+      optional(() => ctx.owox.storages.list(), [] as Awaited<ReturnType<typeof ctx.owox.storages.list>>),
+      st => ({ storages: st.length }),
+    ),
   ])
 
   const [connectors, rawReports, triggers, quality, health, canvas] = await Promise.all([

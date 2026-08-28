@@ -169,7 +169,17 @@ export function useWires(
       const { lit, links } = id
         ? reach(wires, chains, id)
         : { lit: new Set<string>(), links: new Set<string>() }
-      for (const el of cards()) el.classList.toggle('lit', lit.has(el.id))
+      for (const el of cards()) {
+        // A folded block stands in for the cards it holds, so it takes the border those cards
+        // would have taken: the line ends somewhere visible, and says where.
+        const holds = el.dataset.holds?.split(',')
+        const standsIn =
+          holds !== undefined &&
+          [...lit].some(
+            node => holds.some(prefix => node.startsWith(prefix)) && !canvas.querySelector(`#${CSS.escape(node)}`),
+          )
+        el.classList.toggle('lit', lit.has(el.id) || standsIn)
+      }
       for (const path of paths) {
         const from = path.dataset.from ?? ''
         const to = path.dataset.to ?? ''

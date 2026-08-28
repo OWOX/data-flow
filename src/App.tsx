@@ -166,6 +166,7 @@ type Page = {
   setStorageFlags: (value: string[]) => void
   folded: Set<string>
   onFold: (block: string) => void
+  bandLit: (block: keyof typeof BANDS) => boolean
   storageScopeTitle?: string
   marts: Mart[]
   martCards: Cards<Mart>
@@ -482,6 +483,18 @@ function Canvas({
     [pinned, wires, model.chains],
   )
 
+  /**
+   * A block takes the border its folded cards would have taken.
+   *
+   * Rendered rather than written onto the DOM, for the reason the cards' own lighting is: a
+   * filter or a drag re-renders the block and would wipe anything set by hand.
+   */
+  const bandLit = (block: keyof typeof BANDS) => {
+    if (!folded.has(block) || !state.lit) return false
+    const prefixes = BANDS[block].holds.split(',')
+    return [...state.lit].some(id => prefixes.some(prefix => id.startsWith(prefix)))
+  }
+
   const revision = [sourceCards, storageCards, martCards, destinationCards, exitCards, reportCards]
     .map(block => block.key)
     .join('|')
@@ -500,6 +513,7 @@ function Canvas({
     setStorageFlags,
     folded,
     onFold,
+    bandLit,
     marts,
     martCards,
     martSearch,
@@ -559,7 +573,7 @@ function Canvas({
   )
 }
 
-function SourcesBlock({ state, ctx, model, sourceCards, pending, folded, onFold }: Page) {
+function SourcesBlock({ state, ctx, model, sourceCards, pending, folded, onFold, bandLit }: Page) {
   return (
     <Block
       id={BANDS.sources.id}
@@ -568,6 +582,7 @@ function SourcesBlock({ state, ctx, model, sourceCards, pending, folded, onFold 
       title="Sources"
       count={pending?.counts.sources ?? model.sources.length}
       loading={reading(pending)}
+      lit={bandLit('sources')}
       folded={folded.has('sources')}
       onFold={() => onFold('sources')}
       hint="The connectors this project pulls from. One card per source, badged with how many data marts it feeds — its line runs to the storage it lands in, not straight to those marts."
@@ -619,6 +634,7 @@ function StoragesBlock({
   state,
   ctx,
   model,
+  pending,
   storages,
   storageCards,
   storageTypes,
@@ -627,6 +643,7 @@ function StoragesBlock({
   setStorageFlags,
   folded,
   onFold,
+  bandLit,
 }: Page) {
   const types = [...new Set(model.storages.map(storage => storage.type))]
   return (
@@ -635,7 +652,9 @@ function StoragesBlock({
       holds={BANDS.storages.holds}
       icon={Database}
       title="Storages"
-      count={storages.length}
+      count={pending?.counts.storages ?? storages.length}
+      loading={reading(pending)}
+      lit={bandLit('storages')}
       folded={folded.has('storages')}
       onFold={() => onFold('storages')}
       hint="Where the data marts live. Selecting one narrows the Data Marts block to what it holds, and the lines show which sources land in it."
@@ -681,12 +700,12 @@ function StoragesBlock({
   )
 }
 
-function DataMartsBlock({ state, ctx, marts, martCards, martSearch, setMartSearch, flags, setFlags, limit, setLimit, onRecheck, checking, pending, folded, onFold, storageScopeTitle }: Page) {
+function DataMartsBlock({ state, ctx, marts, martCards, martSearch, setMartSearch, flags, setFlags, limit, setLimit, onRecheck, checking, pending, folded, onFold, bandLit, storageScopeTitle }: Page) {
   return (
     <Block
       id={MARTS}
       holds={BANDS.marts.holds}
-      lit={state.lit?.has(MARTS)}
+      lit={state.lit?.has(MARTS) || bandLit('marts')}
       icon={Box}
       title={storageScopeTitle ? `Data Marts · ${storageScopeTitle}` : 'Data Marts'}
       count={pending?.counts.marts ?? marts.length}
@@ -724,7 +743,7 @@ function DataMartsBlock({ state, ctx, marts, martCards, martSearch, setMartSearc
   )
 }
 
-function DestinationsBlock({ state, ctx, model, destinations, destinationCards, exitCards, types, setTypes, pending, folded, onFold }: Page) {
+function DestinationsBlock({ state, ctx, model, destinations, destinationCards, exitCards, types, setTypes, pending, folded, onFold, bandLit }: Page) {
   return (
     <Block
       id={BANDS.destinations.id}
@@ -733,6 +752,7 @@ function DestinationsBlock({ state, ctx, model, destinations, destinationCards, 
       title="Destinations"
       count={pending?.counts.destinations ?? destinations.length}
       loading={reading(pending)}
+      lit={bandLit('destinations')}
       folded={folded.has('destinations')}
       onFold={() => onFold('destinations')}
       hint="Where the reports go, badged with how many write to each. Claude, ChatGPT and the API are ways out that no endpoint lists — select them, or follow the link in the corner."
@@ -807,6 +827,7 @@ function ReportsBlock({
   pending,
   folded,
   onFold,
+  bandLit,
 }: Page) {
   return (
     <Block
@@ -816,6 +837,7 @@ function ReportsBlock({
       title={selectedTitle ? `Reports · ${selectedTitle}` : 'Reports'}
       count={pending?.counts.reports ?? reports.length}
       loading={reading(pending)}
+      lit={bandLit('reports')}
       folded={folded.has('reports')}
       onFold={() => onFold('reports')}
       hint={`The ${PAGE} most recently run reports. Select a data mart or a destination above and this block narrows to its reports.`}
