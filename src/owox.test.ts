@@ -211,9 +211,10 @@ test('tone reads a set of run statuses the way the host does', () => {
   assert.equal(tone(['SUCCESS', 'FAILED']), 'warn')
   assert.equal(tone(['RUNNING']), 'progress')
   assert.equal(tone(['PENDING', 'RUNNING']), 'progress')
-  // Anything still going alongside a settled run is a mix, not a clean state.
-  assert.equal(tone(['SUCCESS', 'RUNNING']), 'warn')
-  assert.equal(tone(['FAILED', 'RUNNING']), 'warn')
+  // A run still going abstains: what has settled decides, and the rest is not evidence yet.
+  assert.equal(tone(['SUCCESS', 'RUNNING']), 'ok')
+  assert.equal(tone(['FAILED', 'RUNNING']), 'bad')
+  assert.equal(tone(['SUCCESS', 'FAILED', 'RUNNING']), 'warn')
   // A status nobody models is not a claim of health.
   assert.equal(tone(['CANCELLED']), 'warn')
 })

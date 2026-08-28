@@ -72,10 +72,12 @@ export function tone(statuses: Array<string | undefined>): Tone {
   const ok = seen.has('SUCCESS')
   const bad = seen.has('FAILED') || seen.has('ERROR')
   const going = seen.has('PENDING') || seen.has('RUNNING')
-  if (going && !ok && !bad) return 'progress'
-  if (bad && !ok && !going) return 'bad'
-  if (ok && !bad && !going) return 'ok'
-  return 'warn'
+  // A run still going is not evidence yet, so it abstains rather than muddying the verdict. The
+  // host applies this rule to three runs at a time; a destination gathers one per report, and with
+  // twenty of them something is nearly always in flight — which would leave it amber for good.
+  if (!ok && !bad) return going ? 'progress' : 'warn'
+  if (ok && bad) return 'warn'
+  return bad ? 'bad' : 'ok'
 }
 
 export type Source = { key: string; name: string; logo?: string; marts: number; tone: Tone }
