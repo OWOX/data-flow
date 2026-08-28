@@ -16,6 +16,7 @@ const MEANING: Record<Wire['kind'], string> = {
   report: 'Route: a report runs this data mart into that destination',
   dormant: 'Route never run: the report exists, but has never carried data',
   run: 'Destination → report: a report that writes to it',
+  direct: 'Data mart → report: where it writes is not visible from here',
   exit: 'Every data mart in the project is readable here',
 }
 

@@ -131,7 +131,7 @@ export type Wire = {
   from: string
   to: string
   /** `dormant` is a route that exists but has never carried data: drawn only when selected. */
-  kind: 'source' | 'held' | 'relationship' | 'report' | 'dormant' | 'run' | 'exit'
+  kind: 'source' | 'held' | 'relationship' | 'report' | 'dormant' | 'run' | 'direct' | 'exit'
 }
 
 export type Storage = {
@@ -585,6 +585,9 @@ function drawWires(
   for (const report of reports) {
     if (report.destinationId && destinationBy.has(report.destinationId)) {
       wires.push({ from: destId(report.destinationId), to: reportId(report.id), kind: 'run' })
+    } else if (report.martId && known.has(report.martId)) {
+      // Nowhere to route it through, but the mart it reads is right there.
+      wires.push({ from: martId(report.martId), to: reportId(report.id), kind: 'direct' })
     }
   }
 
@@ -608,13 +611,16 @@ function traceChains(
   for (const report of reports) {
     const mart = report.martId ? martBy.get(report.martId) : undefined
     const destination = report.destinationId ? destinationBy.get(report.destinationId) : undefined
-    if (!destination) continue
+    // A destination this member cannot see used to drop the whole chain — the source, the storage
+    // and the mart with it, all of which are known. The report reads that mart whatever happens
+    // downstream, so the chain keeps everything up to it and leaves out only the missing link.
+    if (!destination && !mart) continue
     chains.push(
       [
         mart?.source && sources.has(mart.source) ? sourceId(mart.source) : undefined,
         mart?.storageId ? storeId(mart.storageId) : undefined,
         mart ? martId(mart.id) : undefined,
-        destId(destination.id),
+        destination ? destId(destination.id) : undefined,
         reportId(report.id),
       ].filter((id): id is string => Boolean(id)),
     )

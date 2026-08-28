@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { loadModel, qualityTone, tone, worst } from './owox.ts'
+import { reach } from './wires.ts'
 
 const marts = [
   { id: 'm1', title: 'Facebook ads', status: 'PUBLISHED', definitionType: 'CONNECTOR', connectorSourceName: 'FacebookAds', storage: { title: 'BigQuery', type: 'GOOGLE_BIGQUERY' }, availableForReporting: true, dataLastUpdated: { dataLastUpdatedAt: '2026-08-01T00:00:00Z', coverage: 'complete' } },
@@ -238,4 +239,33 @@ test('worst outranks by severity and ignores idle', () => {
   // Quality that has never run says nothing, so the run status stands alone.
   assert.equal(worst([tone(['SUCCESS']), qualityTone('idle')]), 'ok')
   assert.equal(worst([tone(['FAILED']), qualityTone('idle')]), 'bad')
+})
+
+test('a report whose destination is invisible still hangs off the mart it reads', async () => {
+  const model = await loadModel(
+    ctx({
+      getJson: async (path: string) =>
+        path === '/api/data-marts'
+          ? { items: marts, total: marts.length, nextOffset: null }
+          : path === '/api/connectors'
+            ? [{ name: 'FacebookAds', title: 'Facebook Ads' }]
+            : path === '/api/data-marts/scheduled-triggers'
+              ? {}
+              : [
+                  // Its destination is real to OWOX and unreadable here, which used to take the
+                  // source, the storage and the mart down with it.
+                  { id: 'r9', title: 'Orphan', dataMart: { id: 'm1' }, dataDestinationAccess: { id: 'hidden' } },
+                ],
+    }),
+  )
+
+  assert.deepEqual(
+    model.wires.filter(w => w.to === 'rp-r9'),
+    [{ from: 'dm-m1', to: 'rp-r9', kind: 'direct' }],
+  )
+  // Selecting the source still reaches the report, across the gap where the destination would be.
+  const { lit } = reach(model.wires, model.chains, 'src-facebookads')
+  assert.equal(lit.has('rp-r9'), true)
+  assert.equal(lit.has('dm-m1'), true)
+  assert.equal(lit.has('st-s1'), true)
 })
