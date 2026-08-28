@@ -187,8 +187,14 @@ test('an endpoint the member cannot read costs only its own detail', async () =>
   // No /api/connectors: the raw connector name still names the source.
   assert.deepEqual(model.sources.map(s => s.name), ['FacebookAds'])
   // Only the source lines survive: joins, routes and runs all come from endpoints that failed.
-  // Without the storage walk no mart knows its storage, so nothing routes through one.
-  assert.deepEqual(model.wires.map(w => w.kind), [])
+  // Without the storage walk a mart falls back to matching its storage by title and type. m3's
+  // "Athena" names exactly one storage, so it is still placed; m1 and m2 say "BigQuery", which
+  // matches no storage in this project, so they are left unplaced rather than guessed at.
+  assert.deepEqual(model.wires.map(w => w.kind), ['held'])
+  assert.deepEqual(
+    model.marts.map(m => [m.id, m.storageId]),
+    [['m1', undefined], ['m3', 's2'], ['m2', undefined]],
+  )
 })
 
 

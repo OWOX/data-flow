@@ -446,6 +446,7 @@ export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) =
   const reportsPerDestination = tally(reports.map(r => r.destinationId))
   const failingMarts = new Set(reports.filter(r => r.lastRunStatus === 'ERROR').map(r => r.martId))
 
+  const place = placeMarts(storages as RawStorage[], canvas.holder)
   const marts: Mart[] = dataMarts
     .map(m => {
       const state = qualityBy.get(m.id)?.state
@@ -457,7 +458,7 @@ export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) =
         source: m.connectorSourceName,
         storage: m.storage?.title ?? 'Unknown storage',
         storageType: m.storage?.type ?? 'UNKNOWN',
-        storageId: canvas.holder.get(m.id),
+        storageId: place(m),
         fields: canvas.fields.get(m.id),
         quality: qualityBy.get(m.id),
         freshness: (m.dataLastUpdated as Freshness | undefined) ?? undefined,
@@ -645,6 +646,33 @@ function order(a: Mart, b: Mart) {
 }
 
 /** One row per storage the visible marts live in, with the type its icon comes from. */
+/**
+ * Which storage holds a mart, from the best evidence there is.
+ *
+ * A mart's own record names only `{type, title}` today — verified against the published spec,
+ * where both are required and there is no id — so the mapping has to be found rather than read:
+ *
+ *  1. `storage.id`, for the day OWOX starts sending it. Costs nothing until then, and the moment
+ *     it arrives it wins, needing no change here.
+ *  2. The per-storage walk, which is the only place the mapping is stated today. Authoritative,
+ *     but a member who cannot read that route loses every mart's storage with it.
+ *  3. Title and type, when that pair names exactly one storage. Ambiguous pairs are left unplaced
+ *     rather than guessed at: this project has two storages both called "Google BigQuery", and
+ *     putting a mart in the wrong one draws a line that is simply false.
+ */
+function placeMarts(raw: RawStorage[], walked: Map<string, string>) {
+  const seen = new Map<string, string | null>()
+  for (const storage of raw) {
+    const key = `${storage.type}|${storage.title}`
+    seen.set(key, seen.has(key) ? null : storage.id)
+  }
+  return (mart: OWOXDataMart) =>
+    (mart.storage as { id?: string } | undefined)?.id ??
+    walked.get(mart.id) ??
+    seen.get(`${mart.storage?.type}|${mart.storage?.title}`) ??
+    undefined
+}
+
 /**
  * One card per storage the project has, counting the marts this member can actually see.
  *
