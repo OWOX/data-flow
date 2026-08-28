@@ -185,7 +185,14 @@ export default function App() {
   const [ctx, setCtx] = useState<PluginContext | null>(null)
   const [model, setModel] = useState<Model | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [progress, setProgress] = useState<Progress | null>(null)
+  /**
+   * Starts at nothing read rather than at `null`.
+   *
+   * A null progress means "not loading", which folds nothing — so the first paint drew the grids,
+   * and an empty project's grid still holds the three exit cards and the "new" cards, which are
+   * constants rather than anything read. They appeared before the destinations they sit beside.
+   */
+  const [progress, setProgress] = useState<Progress | null>({ done: 0, total: 1, counts: {} })
   const [checking, setChecking] = useState(false)
   const [folded, setFolded] = useState(true)
 

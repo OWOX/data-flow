@@ -219,9 +219,18 @@ async function listMarts(ctx: PluginContext, report: (loaded: number, total: num
 }
 
 /** Field counts and join edges are both scoped to one storage at a time by the model-canvas route. */
-async function perStorage(ctx: PluginContext, storageIds: string[]) {
+async function perStorage(
+  ctx: PluginContext,
+  storageIds: string[],
+  report: (fraction: number) => void = () => {},
+) {
   const fields = new Map<string, number>()
   const edges: Array<{ from: string; to: string }> = []
+
+  // This read walks every storage, paging every mart in each — on a large project it is most of
+  // the wait, so it reports where it has got to rather than landing as one step at the end.
+  const share = storageIds.length > 0 ? 1 / storageIds.length : 1
+  let walked = 0
 
   for (const storageId of storageIds) {
     await optional(async () => {
@@ -235,6 +244,8 @@ async function perStorage(ctx: PluginContext, storageIds: string[]) {
         for (const node of result.items) fields.set(node.id, node.fieldCount)
         seen += result.items.length
         total = result.total
+        // The edges call is the tail of each storage, so paging owns most of that storage's share.
+        report(walked + share * 0.9 * (total > 0 ? Math.min(seen / total, 1) : 1))
         if (result.nextOffset === null || result.items.length === 0) break
         offset = result.nextOffset
       }
@@ -244,6 +255,8 @@ async function perStorage(ctx: PluginContext, storageIds: string[]) {
         edges.push({ from: edge.sourceDataMartId, to: edge.targetDataMartId })
       }
     }, undefined)
+    walked += share
+    report(walked)
   }
   return { fields, edges }
 }
@@ -291,10 +304,11 @@ export const settling = (model: Model) =>
 
 export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) => void): Promise<Model> {
   let done = 0
-  /** How far through the one read that can report itself part-done, in 0–1 of a read. */
-  let paging = 0
+  /** Reads that can report themselves part-done, each 0–1 of one read. */
+  const partial = { marts: 0, storages: 0 }
   const counts: Progress['counts'] = {}
-  const emit = () => onProgress?.({ done: done + paging, total: READS, counts: { ...counts } })
+  const emit = () =>
+    onProgress?.({ done: done + partial.marts + partial.storages, total: READS, counts: { ...counts } })
   /** Report a read the moment it lands, rather than when the batch it rides in finishes. */
   const track = <T,>(work: Promise<T>, tally?: (value: T) => Partial<Progress['counts']>) =>
     work.then(value => {
@@ -309,10 +323,10 @@ export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) =
     track(
       listMarts(ctx, (loaded, total) => {
         counts.marts = total
-        paging = total > 0 ? loaded / total : 1
+        partial.marts = total > 0 ? loaded / total : 1
         emit()
       }).finally(() => {
-        paging = 0
+        partial.marts = 0
       }),
     ),
     track(ctx.owox.destinations.list(), d => ({ destinations: d.length })),
@@ -343,7 +357,14 @@ export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) =
         {},
       ),
     ),
-    track(perStorage(ctx, storages.map(s => s.id))),
+    track(
+      perStorage(ctx, storages.map(s => s.id), fraction => {
+        partial.storages = Math.min(fraction, 1)
+        emit()
+      }).finally(() => {
+        partial.storages = 0
+      }),
+    ),
   ])
 
   const connectorRunBy = new Map((health.items ?? []).map(row => [row.dataMartId, row.connector?.status]))
