@@ -109,6 +109,16 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
   background: color-mix(in oklab, var(--border) 75%, transparent);
 }
 :root.dark .dm-band-count { background: color-mix(in oklab, white 8%, transparent); }
+/* Beside the count: a bare glyph in the grey of the chrome around it, darkening under the
+   pointer. No border, no fill — a mark you can press, not a button drawn as one. A `button` with
+   no rule of its own gets the browser's, which is exactly the border and fill this must not have. */
+.dm-band-action {
+  display: inline-flex; padding: 0;
+  border: 0; background: none; color: var(--muted-foreground);
+  cursor: pointer; transition: color 150ms;
+}
+.dm-band-action:hover:not(:disabled) { color: var(--foreground); }
+.dm-band-action:disabled { cursor: progress; }
 .dm-band-tools { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-left: auto; }
 /* Wider than the 0.75rem it was: the lines between cards need room to be followed. */
 /* A folded block: one bar where its cards will be, so the page keeps its shape while it reads.
