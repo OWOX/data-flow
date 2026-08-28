@@ -111,24 +111,40 @@ export function useWires(
 
     const layout = () => {
       const origin = canvas.getBoundingClientRect()
-      const at = (id?: string): Box | null => {
-        const el = id ? canvas.querySelector(`#${CSS.escape(id)}`) : null
+      /**
+       * Which block stands in for a card that is not on the page.
+       *
+       * A folded block still holds its cards, so a line to one of them ends at the block rather
+       * than disappearing — the canvas stays connected, and folding hides detail without hiding
+       * the shape. Read from the DOM each layout, since folding changes it.
+       */
+      const bands = [...canvas.querySelectorAll<HTMLElement>('[data-band][data-holds]')].flatMap(band =>
+        (band.dataset.holds ?? '').split(',').map(prefix => [prefix, band] as const),
+      )
+      const standIn = (id: string) => bands.find(([prefix]) => id.startsWith(prefix))?.[1] ?? null
+
+      const at = (id?: string): { el: Element; box: Box } | null => {
+        const el = id ? (canvas.querySelector(`#${CSS.escape(id)}`) ?? standIn(id)) : null
         if (!el) return null
         const r = el.getBoundingClientRect()
         return {
-          left: r.left - origin.left,
-          right: r.right - origin.left,
-          top: r.top - origin.top,
-          bottom: r.bottom - origin.top,
-          width: r.width,
-          height: r.height,
+          el,
+          box: {
+            left: r.left - origin.left,
+            right: r.right - origin.left,
+            top: r.top - origin.top,
+            bottom: r.bottom - origin.top,
+            width: r.width,
+            height: r.height,
+          },
         }
       }
       for (const path of paths) {
         const a = at(path.dataset.from)
         const b = at(path.dataset.to)
-        // A card the filter has hidden ends its lines rather than leaving them drawn to a ghost.
-        if (a && b) path.setAttribute('d', curve(a, b))
+        // A card the filter has hidden ends its lines rather than leaving them drawn to a ghost,
+        // and a line whose ends have folded into the same block would be a loop on one box.
+        if (a && b && a.el !== b.el) path.setAttribute('d', curve(a.box, b.box))
         else path.removeAttribute('d')
       }
     }

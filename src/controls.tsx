@@ -14,6 +14,7 @@ export function Block({
   folded,
   onFold,
   id,
+  holds,
   lit,
   children,
 }: {
@@ -31,12 +32,30 @@ export function Block({
   onFold?: () => void
   /** Set when the block itself is one end of a wire, as the Data Marts block is for the exits. */
   id?: string
+  /** The card-id prefixes this block holds, so a line to a folded card can end at the block. */
+  holds?: string
   lit?: boolean
   children: React.ReactNode
 }) {
   return (
-    <section id={id} data-band={id === undefined ? undefined : ''} className={`dm-band${lit ? ' lit' : ''}`}>
-      <header className="dm-band-head">
+    <section
+      id={id}
+      data-band={id === undefined ? undefined : ''}
+      data-holds={holds}
+      className={`dm-band${lit ? ' lit' : ''}${folded ? ' folded' : ''}`}
+    >
+      <header
+        className="dm-band-head"
+        onClick={
+          onFold &&
+          ((e: React.MouseEvent) => {
+            // Everything in here that does its own thing keeps doing it; the space between is the
+            // fold. The chevron is a button, so it is skipped here and fires its own handler once.
+            if ((e.target as HTMLElement).closest('button, a, input, label, summary, details, .dm-hint')) return
+            onFold()
+          })
+        }
+      >
         <span className="dm-band-icon">
           <Icon size={18} />
         </span>

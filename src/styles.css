@@ -94,7 +94,12 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
 
 /* Wraps: the toolbar has a search box and three filter menus, and unwrapped they hold the header —
    and so the whole band and its card grid — wider than a narrow viewport. */
-.dm-band-head { position: relative; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
+/* The space around the controls folds the block, so the whole row answers to the pointer. */
+.dm-band-head { position: relative; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; cursor: pointer; }
+/* Folded, the header is the whole block: its own bottom margin goes, and the block's padding is
+   even top and bottom rather than the extra it leaves under a grid. */
+.dm-band.folded { padding-bottom: 0.75rem; }
+.dm-band.folded .dm-band-head { margin-bottom: 0; }
 .dm-band-icon {
   display: inline-flex; align-items: center; justify-content: center;
   width: 1.75rem; height: 1.75rem; border-radius: 0.25rem;

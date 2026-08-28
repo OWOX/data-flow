@@ -118,6 +118,19 @@ const FACETS = [...new Set(FLAGS.map(flag => flag.facet))]
  * saying one thing. It gets one line to the block, and the block takes a border.
  */
 const MARTS = 'marts-block'
+/**
+ * Each block's own id, and the card ids it holds.
+ *
+ * A folded block still holds its cards, so `holds` is what lets a line end at the block instead of
+ * vanishing: the canvas keeps its shape when detail is put away.
+ */
+const BANDS = {
+  sources: { id: 'sources-block', holds: 'src-' },
+  storages: { id: 'storages-block', holds: 'st-' },
+  marts: { id: MARTS, holds: 'dm-' },
+  destinations: { id: 'destinations-block', holds: 'dd-,x-' },
+  reports: { id: 'reports-block', holds: 'rp-' },
+}
 const EXIT_WIRES: Wire[] = EXITS.map(exit => ({ from: exit.id, to: MARTS, kind: 'exit' }))
 
 /**
@@ -549,6 +562,8 @@ function Canvas({
 function SourcesBlock({ state, ctx, model, sourceCards, pending, folded, onFold }: Page) {
   return (
     <Block
+      id={BANDS.sources.id}
+      holds={BANDS.sources.holds}
       icon={Plug}
       title="Sources"
       count={pending?.counts.sources ?? model.sources.length}
@@ -616,6 +631,8 @@ function StoragesBlock({
   const types = [...new Set(model.storages.map(storage => storage.type))]
   return (
     <Block
+      id={BANDS.storages.id}
+      holds={BANDS.storages.holds}
       icon={Database}
       title="Storages"
       count={storages.length}
@@ -668,6 +685,7 @@ function DataMartsBlock({ state, ctx, marts, martCards, martSearch, setMartSearc
   return (
     <Block
       id={MARTS}
+      holds={BANDS.marts.holds}
       lit={state.lit?.has(MARTS)}
       icon={Box}
       title={storageScopeTitle ? `Data Marts · ${storageScopeTitle}` : 'Data Marts'}
@@ -709,6 +727,8 @@ function DataMartsBlock({ state, ctx, marts, martCards, martSearch, setMartSearc
 function DestinationsBlock({ state, ctx, model, destinations, destinationCards, exitCards, types, setTypes, pending, folded, onFold }: Page) {
   return (
     <Block
+      id={BANDS.destinations.id}
+      holds={BANDS.destinations.holds}
       icon={ArchiveRestore}
       title="Destinations"
       count={pending?.counts.destinations ?? destinations.length}
@@ -790,6 +810,8 @@ function ReportsBlock({
 }: Page) {
   return (
     <Block
+      id={BANDS.reports.id}
+      holds={BANDS.reports.holds}
       icon={FileText}
       title={selectedTitle ? `Reports · ${selectedTitle}` : 'Reports'}
       count={pending?.counts.reports ?? reports.length}
