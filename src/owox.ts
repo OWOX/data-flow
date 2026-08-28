@@ -211,6 +211,8 @@ type RawStorage = {
   id: string
   title: string
   type: string
+  publishedDataMartsCount?: number
+  draftDataMartsCount?: number
   availableForUse?: boolean
   availableForMaintenance?: boolean
 }
@@ -238,16 +240,17 @@ type Trigger = {
  * the badge can show the real count from the first page, and the bar can fill as the rest arrive
  * instead of jumping when the last one does.
  */
-async function listMarts(ctx: PluginContext, report: (loaded: number, total: number) => void) {
+async function listMarts(ctx: PluginContext, report: (loaded: number, total: number, pages: number) => void) {
   const items: OWOXDataMart[] = []
   let offset: number | undefined
+  let pages = 0
   for (;;) {
     const page = await ctx.owox.getJson<{ items?: OWOXDataMart[]; total?: number; nextOffset?: number | null }>(
       '/api/data-marts',
       offset === undefined ? undefined : { offset: String(offset) },
     )
     items.push(...(page.items ?? []))
-    report(items.length, page.total ?? items.length)
+    report(items.length, page.total ?? items.length, (pages += 1))
     // `nextOffset` is the API's own end-of-list signal, so no page ceiling has to stand in for it.
     if (page.nextOffset === null || page.nextOffset === undefined) return items
     offset = page.nextOffset
@@ -258,20 +261,16 @@ async function listMarts(ctx: PluginContext, report: (loaded: number, total: num
 async function perStorage(
   ctx: PluginContext,
   storageIds: string[],
-  report: (fraction: number) => void = () => {},
+  report: (walked: number) => void = () => {},
 ) {
   const fields = new Map<string, number>()
   /** Which storage holds which mart — the mart's own record names only a title, and titles repeat. */
   const holder = new Map<string, string>()
   const edges: Array<{ from: string; to: string }> = []
   const seenEdges = new Set<string>()
-
-  // This read walks every storage, paging every mart in each — on a large project it is most of
-  // the wait, so it reports where it has got to rather than landing as one step at the end.
-  const share = storageIds.length > 0 ? 1 / storageIds.length : 1
   let walked = 0
 
-  for (const storageId of storageIds) {
+  const walk = async (storageId: string) => {
     await optional(async () => {
       // This route reports its own `total`, so the loop stops on a number the API gave rather than
       // on a ceiling picked here — and cannot run away if `nextOffset` ever fails to end.
@@ -286,8 +285,6 @@ async function perStorage(
         }
         seen += result.items.length
         total = result.total
-        // The edges call is the tail of each storage, so paging owns most of that storage's share.
-        report(walked + share * 0.9 * (total > 0 ? Math.min(seen / total, 1) : 1))
         if (result.nextOffset === null || result.items.length === 0) break
         offset = result.nextOffset
       }
@@ -302,9 +299,22 @@ async function perStorage(
         edges.push({ from: edge.sourceDataMartId, to: edge.targetDataMartId })
       }
     }, undefined)
-    walked += share
-    report(walked)
+    report((walked += 1))
   }
+
+  /**
+   * A few storages at a time, rather than one after another.
+   *
+   * This route is scoped to one storage — `storageId` is required — so it costs two round trips per
+   * storage however little that storage holds, and a project with sixty of them spent two minutes
+   * asking sixty times in a row. Six at once hides the latency without asking the host for sixty.
+   */
+  const queue = [...storageIds]
+  const worker = async () => {
+    for (let id = queue.shift(); id !== undefined; id = queue.shift()) await walk(id)
+  }
+  await Promise.all(Array.from({ length: Math.min(6, storageIds.length) }, worker))
+
   return { fields, holder, edges }
 }
 
@@ -320,8 +330,13 @@ export type Progress = {
   counts: { sources?: number; storages?: number; marts?: number; destinations?: number; reports?: number }
 }
 
-/** The reads below, counted once so the bar cannot drift from the work. */
-const READS = 9
+/**
+ * The reads that cost one request each: destinations, storages, connectors, reports, triggers,
+ * and the two batch queries. The other two cost as many as the project makes them cost, so the
+ * bar counts requests rather than reads — one read in nine was claiming a ninth of the bar while
+ * doing most of the work.
+ */
+const PLAIN_READS = 7
 
 /**
  * The two checks the host runs from its own Actions menu, over every mart on the page.
@@ -351,11 +366,17 @@ export const settling = (model: Model) =>
 
 export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) => void): Promise<Model> {
   let done = 0
-  /** Reads that can report themselves part-done, each 0–1 of one read. */
-  const partial = { marts: 0, storages: 0 }
+  /** What the two paged reads will cost, known only once they have started. */
+  const weight = { marts: 1, storages: 1 }
   const counts: Progress['counts'] = {}
-  const emit = () =>
-    onProgress?.({ done: done + partial.marts + partial.storages, total: READS, counts: { ...counts } })
+  let shown = 0
+  const emit = () => {
+    const total = PLAIN_READS + weight.marts + weight.storages
+    // The weights only sharpen as the project reveals itself, and a bar that goes backwards is
+    // worse than one that pauses, so it never recedes.
+    shown = Math.max(shown, Math.min(done / total, 1))
+    onProgress?.({ done: shown, total: 1, counts: { ...counts } })
+  }
   /** Report a read the moment it lands, rather than when the batch it rides in finishes. */
   const track = <T,>(work: Promise<T>, tally?: (value: T) => Partial<Progress['counts']>) =>
     work.then(value => {
@@ -368,12 +389,12 @@ export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) =
   const [dataMarts, destinations, storages] = await Promise.all([
     // The count comes from page one; the bar fills as the pages after it arrive.
     track(
-      listMarts(ctx, (loaded, total) => {
+      listMarts(ctx, (loaded, total, pages) => {
         counts.marts = total
-        partial.marts = total > 0 ? loaded / total : 1
+        // Every page is a request, and after the first one we know how many there will be.
+        weight.marts = Math.max(1, Math.ceil(total / Math.max(loaded / pages, 1)))
+        done += 1
         emit()
-      }).finally(() => {
-        partial.marts = 0
       }),
     ),
     track(ctx.owox.destinations.list(), d => ({ destinations: d.length })),
@@ -382,6 +403,26 @@ export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) =
       st => ({ storages: st.length }),
     ),
   ])
+
+  /**
+   * Storages worth asking about.
+   *
+   * This route costs two round trips per storage whatever it holds, and the storage list already
+   * says how many data marts each has — so an empty one is two requests that return two empty
+   * lists. A mart in a storage skipped here still finds it by title and type.
+   */
+  const walkable = (storages as RawStorage[])
+    .filter(storage => {
+      // Only a count that is actually there can rule a storage out. A host that does not send one
+      // gets asked, because "unknown" is not "empty".
+      const counted =
+        storage.publishedDataMartsCount !== undefined || storage.draftDataMartsCount !== undefined
+      return (
+        !counted || (storage.publishedDataMartsCount ?? 0) + (storage.draftDataMartsCount ?? 0) > 0
+      )
+    })
+    .map(storage => storage.id)
+  weight.storages = Math.max(1, walkable.length)
 
   const [connectors, rawReports, triggers, quality, health, canvas] = await Promise.all([
     track(optional(() => ctx.owox.getJson<Connector[]>('/api/connectors'), []), c => ({ sources: c.length })),
@@ -407,14 +448,11 @@ export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) =
         {},
       ),
     ),
-    track(
-      perStorage(ctx, storages.map(s => s.id), fraction => {
-        partial.storages = Math.min(fraction, 1)
-        emit()
-      }).finally(() => {
-        partial.storages = 0
-      }),
-    ),
+    perStorage(ctx, walkable, walked => {
+      done += 1
+      if (walked === walkable.length) done += 1
+      emit()
+    }),
   ])
 
   const connectorRunBy = new Map((health.items ?? []).map(row => [row.dataMartId, row.connector?.status]))

@@ -159,6 +159,8 @@ type Page = {
   model: Model
   sourceCards: Cards<Source>
   storages: Storage[]
+  storagesMatching: number
+  showEmptyStorages: () => void
   storageCards: Cards<Storage>
   storageTypes: string[]
   setStorageTypes: (value: string[]) => void
@@ -328,6 +330,8 @@ function Canvas({
   const [martSearch, setMartSearch] = useState('')
   const [storageTypes, setStorageTypes] = useState<string[]>([])
   const [storageFlags, setStorageFlags] = useState(() => STORAGE_FLAGS.map(flag => flag.key))
+  /** A storage nothing is built on is real but not yet part of any flow, so it waits behind a card. */
+  const [showEmptyStorages, setShowEmptyStorages] = useState(false)
   const [folded, setFolded] = useState<Set<string>>(new Set())
   const onFold = useCallback(
     (block: string) =>
@@ -389,7 +393,7 @@ function Canvas({
     )
   }, [model.marts, storageScope, flags, martSearch])
 
-  const storageList = useMemo(() => {
+  const storagesMatching = useMemo(() => {
     const chosen = STORAGE_FLAGS.filter(flag => storageFlags.includes(flag.key))
     return model.storages.filter(
       storage =>
@@ -397,6 +401,7 @@ function Canvas({
         STORAGE_FACETS.every(facet => chosen.some(flag => flag.facet === facet && flag.test(storage))),
     )
   }, [model.storages, storageTypes, storageFlags])
+  const storageList = showEmptyStorages ? storagesMatching : storagesMatching.filter(s => s.marts > 0)
 
   const destinations = model.destinations.filter(destination => types.includes(destination.type))
 
@@ -505,6 +510,8 @@ function Canvas({
     model,
     sourceCards,
     storages: storageList,
+    storagesMatching: storagesMatching.length,
+    showEmptyStorages: () => setShowEmptyStorages(true),
     storageCards,
     storageScopeTitle: model.storages.find(storage => storage.id === storageScope)?.title,
     storageTypes,
@@ -636,6 +643,8 @@ function StoragesBlock({
   model,
   pending,
   storages,
+  storagesMatching,
+  showEmptyStorages,
   storageCards,
   storageTypes,
   setStorageTypes,
@@ -695,6 +704,13 @@ function StoragesBlock({
           linkTitle="Open this storage"
         />
       ))}
+      {/* A storage holding nothing is not part of any flow yet, so it waits to be asked for. */}
+      <MoreCard
+        shown={storages.length}
+        total={storagesMatching}
+        page={storagesMatching - storages.length}
+        onMore={showEmptyStorages}
+      />
       <AddCard ctx={ctx} to={`/ui/${ctx.projectId}/data-storages`} label="New storage" />
     </Block>
   )

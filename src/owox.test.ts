@@ -22,8 +22,11 @@ const ctx = (over: Record<string, unknown> = {}) => {
     },
     storages: {
       list: async () => [
-        { id: 's1', title: 'BQ', type: 'GOOGLE_BIGQUERY', availableForUse: true, availableForMaintenance: false },
+        { id: 's1', title: 'BQ', type: 'GOOGLE_BIGQUERY', availableForUse: true, availableForMaintenance: false, publishedDataMartsCount: 2, draftDataMartsCount: 0 },
+        // No counts at all: unknown is not empty, so it is still walked.
         { id: 's2', title: 'Athena', type: 'AWS_ATHENA', availableForUse: false, availableForMaintenance: false },
+        // Counted, and holding nothing — two round trips this never has to make.
+        { id: 's3', title: 'Empty', type: 'SNOWFLAKE', availableForUse: true, availableForMaintenance: true, publishedDataMartsCount: 0, draftDataMartsCount: 0 },
       ],
     },
     models: {
@@ -103,6 +106,7 @@ test('the whole graph: cards, order, badges and lines', async () => {
     [
       ['s1', 'BQ', 2, true],
       ['s2', 'Athena', 1, false],
+      ['s3', 'Empty', 0, true],
     ],
   )
 
