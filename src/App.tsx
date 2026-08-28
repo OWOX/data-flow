@@ -516,16 +516,21 @@ function SourcesBlock({ state, ctx, model, sourceCards, pending }: Page) {
 /** Starts both host checks over every mart, and spins until they have answered. */
 function RecheckButton({ onRecheck, checking }: { onRecheck: () => void; checking: boolean }) {
   const hint = 'Check Quality & Freshness'
+  // `dm-mark` is what the quality and freshness glyphs wear: it carries the bubble, and the rule
+  // that shows it on hover. This one presses, so it takes the pointer back from `cursor: help`.
   return (
     <button
       type="button"
-      className="dm-band-action"
+      className="dm-band-action dm-mark"
       onClick={onRecheck}
       disabled={checking}
-      title={checking ? 'Checking…' : hint}
       aria-label={hint}
     >
       <RefreshCw size={14} className={checking ? 'dm-spin' : undefined} />
+      <span className="dm-hint-body dm-mark-body dm-mark-below">
+        <span>{checking ? 'Checking…' : hint}</span>
+        <span>Runs both checks over every data mart in this project, and waits for the answers.</span>
+      </span>
     </button>
   )
 }

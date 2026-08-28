@@ -312,6 +312,10 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
 /* A mark that leads somewhere drops the link's underline; its tone still sets the colour, and
    `a.dm-mark` must not restate that or it would outrank `.dm-ok` and friends. */
 a.dm-mark { cursor: pointer; text-decoration: none; }
+button.dm-mark { cursor: pointer; }
+/* A mark in a block header has the whole page below it and a header above, so its bubble hangs
+   down — the way the block's own info hint does — rather than up as a card's does. */
+.dm-mark-below { top: calc(100% + 0.5rem); bottom: auto; }
 /* Narrower than the block hint's 22rem: this one hangs off a card, and the rightmost column leaves
    only the card's own width plus the page gutter before the viewport edge.
    ponytail: a fixed clamp, so a bubble near the edge can still lose a few px to the clip above at
