@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import type { PluginContext } from '@owox/plugin-sdk'
 import { KIND, type Mark } from './icons'
-import { count, freshnessLines, initials, qualityChecks, qualityLine, qualityVisual } from './format'
+import { count, freshnessLines, initials, num, qualityChecks, qualityLine, qualityVisual } from './format'
 import { martId, qualityTone, type Mart, type Tone } from './owox'
 import type { DragProps } from './reorder'
 
@@ -131,7 +131,7 @@ export function MartCard({
               {KindIcon && <KindIcon size={12} />} {kind.label}
             </span>
           )}
-          {mart.fields !== undefined && <span className="dm-badge">{mart.fields} fields</span>}
+          {mart.fields !== undefined && <span className="dm-badge">{num(mart.fields)} fields</span>}
           {mart.triggers > 0 && (
             <span className="dm-badge dm-badge-shrink" title={count(mart.triggers, 'trigger')}>
               <CalendarClock size={12} /> {count(mart.triggers, 'trigger')}
@@ -182,10 +182,10 @@ export function MoreCard({
   return (
     <button type="button" className="dm-node dm-add" onClick={onMore}>
       <ChevronDown size={18} />
-      <span>Load {Math.min(page, left).toLocaleString()} more</span>
+      <span>Load {num(Math.min(page, left))} more</span>
       {/* The count of what is still hidden, which the button's own number never repeats: on the
           last page the two would be the same number twice. */}
-      {left > page && <span className="dm-muted">{left.toLocaleString()} left</span>}
+      {left > page && <span className="dm-muted">{num(left)} left</span>}
     </button>
   )
 }

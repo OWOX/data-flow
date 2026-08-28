@@ -53,7 +53,15 @@ export function qualityVisual(summary?: QualitySummary): { icon: Mark; tone: Ton
   }
 }
 
-export const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`
+/**
+ * Every number the page shows, grouped by the reader's own locale.
+ *
+ * A project with four figures of data marts reads as a year otherwise, and the separator is not
+ * a comma everywhere.
+ */
+export const num = (n: number) => n.toLocaleString()
+
+export const count = (n: number, noun: string) => `${num(n)} ${noun}${n === 1 ? '' : 's'}`
 
 export const initials = (name: string) =>
   name

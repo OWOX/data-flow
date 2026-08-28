@@ -1,5 +1,6 @@
 // The controls a block carries: its chrome, its search box, its filter menus.
 import { ChevronDown, Info, Search } from 'lucide-react'
+import { num } from './format'
 import type { Mark } from './icons'
 
 export function Block({
@@ -35,7 +36,7 @@ export function Block({
           <Icon size={18} />
         </span>
         <h2 className="dm-band-title">{title}</h2>
-        {total !== undefined && <span className="dm-badge dm-band-count">{total}</span>}
+        {total !== undefined && <span className="dm-badge dm-band-count">{num(total)}</span>}
         {action}
         <span className="dm-hint" tabIndex={0} role="note" aria-label={hint}>
           <Info size={14} />
@@ -150,7 +151,7 @@ export function MultiSelect({
                 />
                 {option.icon && <option.icon size={14} />}
                 <span className="dm-filter-label">{option.label}</span>
-                {option.count !== undefined && <span className="dm-badge">{option.count}</span>}
+                {option.count !== undefined && <span className="dm-badge">{num(option.count)}</span>}
               </label>
               <button type="button" className="dm-filter-only" onClick={() => only(option.value)}>
                 only
