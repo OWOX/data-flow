@@ -509,6 +509,9 @@ function SourcesBlock({ state, ctx, model, sourceCards, pending }: Page) {
           badge={count(source.marts, 'data mart')}
         />
       ))}
+      {/* A source is not a thing you create: it appears once a connector data mart pulls from it,
+          so the way to add one is the way to add that mart. */}
+      <AddCard ctx={ctx} to={`/ui/${ctx.projectId}/data-marts/create`} label="Connect source" />
     </Block>
   )
 }
