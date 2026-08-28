@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AddCard, Logo, MartCard, MoreCard, NodeCard, RunIcon, type CardState } from './cards'
-import { ago, count, reportName, runTone, scheduleLabel } from './format'
+import { ago, count, reportName, scheduleLabel } from './format'
 import { Block, MultiSelect, SearchBox } from './controls'
 import { DESTINATION, EXIT, STORAGE, type Mark } from './icons'
 import {
@@ -912,7 +912,7 @@ function ReportsBlock({
             )}
           </div>
           <div className="dm-node-foot">
-            <span className={`dm-status dm-${runTone(report.lastRunStatus)}`} title={report.lastRunStatus}>
+            <span className={`dm-status dm-${report.tone}`} title={report.lastRunStatus}>
               <RunIcon status={report.lastRunStatus} />
             </span>
             <span className="dm-muted dm-run">{report.lastRunAt ? ago(report.lastRunAt) : 'never run'}</span>

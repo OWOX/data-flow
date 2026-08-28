@@ -2,7 +2,7 @@
 // lines connect them. Run with `npm test` — node strips the types, so this needs no test framework.
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { loadModel, qualityTone, tone, worst } from './owox.ts'
+import { loadModel, qualityTone, recent, tone, worst } from './owox.ts'
 import { reach } from './wires.ts'
 
 const marts = [
@@ -269,4 +269,18 @@ test('a report whose destination is invisible still hangs off the mart it reads'
   assert.equal(lit.has('rp-r9'), true)
   assert.equal(lit.has('dm-m1'), true)
   assert.equal(lit.has('st-s1'), true)
+})
+
+// One window, one meaning: a run the host would have forgotten is forgotten here too.
+test('a run outside the window stops counting', () => {
+  const ago = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString()
+  assert.equal(recent(ago(1)), true)
+  assert.equal(recent(ago(29)), true)
+  assert.equal(recent(ago(31)), false)
+  assert.equal(recent(ago(394)), false)
+  assert.equal(recent(undefined), false)
+  assert.equal(recent(null), false)
+  // A destination whose only failure is a year old is untested, not failing.
+  assert.equal(tone([recent(ago(394)) ? 'FAILED' : undefined]), 'idle')
+  assert.equal(tone([recent(ago(2)) ? 'FAILED' : undefined]), 'bad')
 })

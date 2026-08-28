@@ -66,6 +66,21 @@ export const worst = (tones: Tone[]): Tone =>
 /** A border is painted in four colours and a grey, so a notice reads as what it is: an issue. */
 export const qualityTone = (t: Tone): Tone => (t === 'notice' ? 'warn' : t)
 
+/**
+ * How far back a run still counts, in days.
+ *
+ * The host applies its own cutoff to data marts and sources server-side — `health-status` simply
+ * does not return runs older than it, and its own wording says thirty days. Reports and the
+ * destinations they feed arrive with no cutoff at all, so the same one is applied here, from the
+ * `lastRunAt` that comes in the same payload as the status. One number, one meaning, no extra
+ * request. If OWOX ever states a different figure, this is the only place to change.
+ */
+export const RECENT_DAYS = 30
+
+/** Whether a run is recent enough to count. A run that never happened never is. */
+export const recent = (at?: string | null) =>
+  at !== undefined && at !== null && Date.now() - Date.parse(at) <= RECENT_DAYS * 86_400_000
+
 export function tone(statuses: Array<string | undefined>): Tone {
   const seen = new Set(statuses.filter(Boolean))
   if (seen.size === 0) return 'idle'
@@ -445,7 +460,7 @@ export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) =
     preJoin: report.filterConfig?.filter(rule => rule?.placement === 'pre-join').length ?? 0,
     postJoin: report.filterConfig?.filter(rule => rule?.placement !== 'pre-join').length ?? 0,
     aggregations: report.aggregationConfig?.length ?? 0,
-    tone: tone([report.lastRunStatus]),
+    tone: recent(report.lastRunAt) ? tone([report.lastRunStatus]) : 'idle',
   }))
   const reportsPerMart = tally(reports.map(r => r.martId))
   const reportsPerDestination = tally(reports.map(r => r.destinationId))
@@ -511,7 +526,8 @@ export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) =
     if (!report.destinationId) continue
     destinationRuns.set(report.destinationId, [
       ...(destinationRuns.get(report.destinationId) ?? []),
-      report.lastRunStatus,
+      // A run outside the window says nothing, the way one the host has forgotten says nothing.
+      recent(report.lastRunAt) ? report.lastRunStatus : undefined,
     ])
   }
 

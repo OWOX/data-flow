@@ -86,7 +86,6 @@ export const scheduleLabel = (schedule: { total: number; active: number; cron?: 
 export const reportName = (report: Report) =>
   (report.destinationType === 'LOOKER_STUDIO' ? report.martTitle : undefined) ?? report.title
 
-export const runTone = (status?: string) => (status === 'ERROR' ? 'bad' : status === 'SUCCESS' ? 'ok' : 'idle')
 
 /**
  * What each coverage means, in the host's own words.
