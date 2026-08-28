@@ -22,7 +22,11 @@
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--background); color: var(--foreground); }
+/* The ground is the host's, not ours. It rounds the frame this page sits in, and an opaque
+   background here paints a square corner straight over that rounding. `--background` stays: the
+   hint bubbles use it as their text colour. */
+html, body { background: transparent; }
+body { margin: 0; color: var(--foreground); }
 /* A tooltip anchored on a right-hand card reaches past the content edge, and a hidden one is still
    laid out — so without this the page carries a horizontal scrollbar with nothing hovered. `clip`
    rather than `hidden`: hidden would make this a scroll container and take vertical scrolling with
