@@ -11,6 +11,8 @@ export function Block({
   toolbar,
   action,
   loading,
+  folded,
+  onFold,
   id,
   lit,
   children,
@@ -24,6 +26,9 @@ export function Block({
   action?: React.ReactNode
   /** 0–1 while the project is still being read: the block stays folded and shows a bar instead. */
   loading?: number | null
+  /** Folded by the reader rather than by the load: header only, and its controls go with the cards. */
+  folded?: boolean
+  onFold?: () => void
   /** Set when the block itself is one end of a wire, as the Data Marts block is for the exits. */
   id?: string
   lit?: boolean
@@ -42,9 +47,22 @@ export function Block({
           <Info size={14} />
           <span className="dm-hint-body">{hint}</span>
         </span>
-        {toolbar && <div className="dm-band-tools">{toolbar}</div>}
+        {/* Filtering what you cannot see answers nothing, so the controls fold with the cards. */}
+        {toolbar && !folded && <div className="dm-band-tools">{toolbar}</div>}
+        {onFold && (
+          <button
+            type="button"
+            className={`dm-band-fold${toolbar && !folded ? '' : ' dm-band-fold-alone'}`}
+            onClick={onFold}
+            aria-expanded={!folded}
+            aria-label={folded ? `Show ${title}` : `Hide ${title}`}
+            title={folded ? `Show ${title}` : `Hide ${title}`}
+          >
+            <ChevronDown size={16} className={folded ? undefined : 'dm-band-fold-open'} />
+          </button>
+        )}
       </header>
-      {loading === null || loading === undefined ? (
+      {folded ? null : loading === null || loading === undefined ? (
         <div className="dm-band-grid">{children}</div>
       ) : (
         <div

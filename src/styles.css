@@ -55,7 +55,7 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
 }
 /* Blue crosses a block boundary — a source feeding a mart, a mart reaching a destination, a
    destination running a report. Grey stays inside the Data Marts block: a join between two marts. */
-#wires .source, #wires .report, #wires .dormant, #wires .run { stroke: var(--primary); }
+#wires .source, #wires .held, #wires .report, #wires .dormant, #wires .run { stroke: var(--primary); }
 #wires .relationship, #wires .exit { stroke: var(--muted-foreground); }
 
 #wires path.lit { opacity: 1; }
@@ -120,6 +120,16 @@ body { margin: 0; background: var(--background); color: var(--foreground); }
 .dm-band-action:hover:not(:disabled) { color: var(--foreground); }
 .dm-band-action:disabled { cursor: progress; }
 .dm-band-tools { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-left: auto; }
+/* The fold sits last in the header, hard right. It only pushes itself over when no toolbar has
+   already claimed the space. */
+.dm-band-fold {
+  display: inline-flex; padding: 0;
+  border: 0; background: none; color: var(--muted-foreground);
+  cursor: pointer; transition: color 150ms, rotate 150ms;
+}
+.dm-band-fold-alone { margin-left: auto; }
+.dm-band-fold:hover { color: var(--foreground); }
+.dm-band-fold-open { rotate: 180deg; }
 /* Wider than the 0.75rem it was: the lines between cards need room to be followed. */
 /* A folded block: one bar where its cards will be, so the page keeps its shape while it reads.
    Named for the bar, not for what it measures — `.dm-progress` is a tone, and was once both.

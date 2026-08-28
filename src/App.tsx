@@ -26,12 +26,14 @@ import {
   reportId,
   settling,
   sourceId,
+  storeId,
   type Destination,
   type Mart,
   type Model,
   type Report,
   type Progress,
   type Source,
+  type Storage,
   type Wire,
 } from './owox'
 import { useReorder, type Cards } from './reorder'
@@ -118,6 +120,20 @@ const FACETS = [...new Set(FLAGS.map(flag => flag.facet))]
 const MARTS = 'marts-block'
 const EXIT_WIRES: Wire[] = EXITS.map(exit => ({ from: exit.id, to: MARTS, kind: 'exit' }))
 
+/**
+ * The Storage block's filter.
+ *
+ * Type is the one thing a storage is, and sharing is the one thing it grants — OWOX's own words:
+ * a storage everyone may build on, and one other technical users may maintain.
+ */
+const STORAGE_FLAGS: Array<{ key: string; facet: string; label: string; test: (s: Storage) => boolean }> = [
+  { key: 'use', facet: 'sharing', label: 'Shared for use', test: s => s.sharedForUse },
+  { key: 'no-use', facet: 'sharing', label: 'Not shared for use', test: s => !s.sharedForUse },
+  { key: 'maint', facet: 'maintenance', label: 'Shared for maintenance', test: s => s.sharedForMaintenance },
+  { key: 'no-maint', facet: 'maintenance', label: 'Not shared for maintenance', test: s => !s.sharedForMaintenance },
+]
+const STORAGE_FACETS = [...new Set(STORAGE_FLAGS.map(flag => flag.facet))]
+
 /** The Reports block's own filter: the one thing about a report that is not on its card's face. */
 const REPORT_FLAGS: Array<{ key: string; label: string; test: (report: Report) => boolean }> = [
   { key: 'triggers', label: 'With triggers', test: report => (report.schedule?.total ?? 0) > 0 },
@@ -129,12 +145,19 @@ type Page = {
   ctx: PluginContext
   model: Model
   sourceCards: Cards<Source>
+  storages: Storage[]
+  storageCards: Cards<Storage>
+  storageTypes: string[]
+  setStorageTypes: (value: string[]) => void
+  storageFlags: string[]
+  setStorageFlags: (value: string[]) => void
+  folded: Set<string>
+  onFold: (block: string) => void
+  storageScopeTitle?: string
   marts: Mart[]
   martCards: Cards<Mart>
   martSearch: string
   setMartSearch: (value: string) => void
-  storages: string[]
-  setStorages: (value: string[]) => void
   flags: string[]
   setFlags: (value: string[]) => void
   limit: number
@@ -287,9 +310,20 @@ function Canvas({
   const [limit, setLimit] = useState(PAGE)
   // Filters start with everything ticked rather than empty: an empty menu now means "none", which
   // is what unticking "Select all" asks for.
-  const [storages, setStorages] = useState<string[]>([])
   const [flags, setFlags] = useState(() => FLAGS.map(flag => flag.key))
   const [martSearch, setMartSearch] = useState('')
+  const [storageTypes, setStorageTypes] = useState<string[]>([])
+  const [storageFlags, setStorageFlags] = useState(() => STORAGE_FLAGS.map(flag => flag.key))
+  const [folded, setFolded] = useState<Set<string>>(new Set())
+  const onFold = useCallback(
+    (block: string) =>
+      setFolded(open => {
+        const next = new Set(open)
+        if (!next.delete(block)) next.add(block)
+        return next
+      }),
+    [],
+  )
   const [types, setTypes] = useState<string[]>(() => EXIT_TYPES.map(row => row.type))
   const [reportSearch, setReportSearch] = useState('')
   const [reportFlags, setReportFlags] = useState(() => REPORT_FLAGS.map(flag => flag.key))
@@ -302,6 +336,8 @@ function Canvas({
    * Only a data mart, a destination, or clearing the selection re-aims the block.
    */
   const [scope, setScope] = useState<string | null>(null)
+  /** Which storage the Data Marts block is narrowed to, if any. */
+  const [storageScope, setStorageScope] = useState<string | null>(null)
   /**
    * Storage and destination-type options do not exist until the project has been read, so they are
    * ticked when they arrive rather than in `useState`, which runs against an empty project. Once
@@ -311,7 +347,7 @@ function Canvas({
   useEffect(() => {
     if (seeded.current || model.storages.length + model.destinationTypes.length === 0) return
     seeded.current = true
-    setStorages(model.storages.map(storage => storage.title))
+    setStorageTypes([...new Set(model.storages.map(storage => storage.type))])
     setTypes([...model.destinationTypes.map(type => type.type), ...EXIT_TYPES.map(row => row.type)])
   }, [model])
   const onPin = useCallback((id: string | null) => {
@@ -320,6 +356,11 @@ function Canvas({
       setScope(id)
       setReportLimit(PAGE)
     }
+    // A storage narrows the Data Marts block to what it holds; anything else clears that.
+    if (id === null || id.startsWith('st-') || id.startsWith('dm-')) {
+      setStorageScope(id?.startsWith('st-') ? id.slice(3) : null)
+      setLimit(PAGE)
+    }
   }, [])
 
   const marts = useMemo(() => {
@@ -327,12 +368,21 @@ function Canvas({
     const needle = martSearch.trim().toLowerCase()
     return model.marts.filter(
       mart =>
-        storages.includes(mart.storage) &&
+        (!storageScope || mart.storageId === storageScope) &&
         (needle === '' || mart.title.toLowerCase().includes(needle)) &&
         // A facet with nothing ticked asks for nothing, so nothing is what it gets.
         FACETS.every(facet => chosen.some(flag => flag.facet === facet && flag.test(mart))),
     )
-  }, [model.marts, storages, flags, martSearch])
+  }, [model.marts, storageScope, flags, martSearch])
+
+  const storageList = useMemo(() => {
+    const chosen = STORAGE_FLAGS.filter(flag => storageFlags.includes(flag.key))
+    return model.storages.filter(
+      storage =>
+        storageTypes.includes(storage.type) &&
+        STORAGE_FACETS.every(facet => chosen.some(flag => flag.facet === facet && flag.test(storage))),
+    )
+  }, [model.storages, storageTypes, storageFlags])
 
   const destinations = model.destinations.filter(destination => types.includes(destination.type))
 
@@ -403,6 +453,7 @@ function Canvas({
   }, [reports, reportLimit, pinned, model.reports])
   // Cards can be dragged into another order inside their block; the lines follow them.
   const sourceCards = useReorder(model.sources, source => source.key)
+  const storageCards = useReorder(storageList, storage => storage.id)
   const martCards = useReorder(shown, mart => mart.id)
   const destinationCards = useReorder(destinations, destination => destination.id)
   const exitCards = useReorder(EXITS.filter(exit => types.includes(exit.type)), exit => exit.id)
@@ -418,7 +469,7 @@ function Canvas({
     [pinned, wires, model.chains],
   )
 
-  const revision = [sourceCards, martCards, destinationCards, exitCards, reportCards]
+  const revision = [sourceCards, storageCards, martCards, destinationCards, exitCards, reportCards]
     .map(block => block.key)
     .join('|')
   useWires(canvas, wires, model.chains, revision, pinned, onPin)
@@ -427,12 +478,19 @@ function Canvas({
     ctx,
     model,
     sourceCards,
+    storages: storageList,
+    storageCards,
+    storageScopeTitle: model.storages.find(storage => storage.id === storageScope)?.title,
+    storageTypes,
+    setStorageTypes,
+    storageFlags,
+    setStorageFlags,
+    folded,
+    onFold,
     marts,
     martCards,
     martSearch,
     setMartSearch,
-    storages,
-    setStorages,
     flags,
     setFlags,
     limit,
@@ -477,6 +535,8 @@ function Canvas({
 
       <SourcesBlock {...page} />
 
+      <StoragesBlock {...page} />
+
       <DataMartsBlock {...page} />
 
       <DestinationsBlock {...page} />
@@ -486,14 +546,16 @@ function Canvas({
   )
 }
 
-function SourcesBlock({ state, ctx, model, sourceCards, pending }: Page) {
+function SourcesBlock({ state, ctx, model, sourceCards, pending, folded, onFold }: Page) {
   return (
     <Block
       icon={Plug}
       title="Sources"
       count={pending?.counts.sources ?? model.sources.length}
       loading={reading(pending)}
-      hint="Input sources behind the connector data marts below. One card per source, badged with how many data marts it feeds."
+      folded={folded.has('sources')}
+      onFold={() => onFold('sources')}
+      hint="The connectors this project pulls from. One card per source, badged with how many data marts it feeds — its line runs to the storage it lands in, not straight to those marts."
     >
       {sourceCards.items.map(source => (
         <NodeCard
@@ -538,34 +600,86 @@ function RecheckButton({ onRecheck, checking }: { onRecheck: () => void; checkin
   )
 }
 
-function DataMartsBlock({ state, ctx, model, marts, martCards, martSearch, setMartSearch, storages, setStorages, flags, setFlags, limit, setLimit, onRecheck, checking, pending }: Page) {
+function StoragesBlock({
+  state,
+  ctx,
+  model,
+  storages,
+  storageCards,
+  storageTypes,
+  setStorageTypes,
+  storageFlags,
+  setStorageFlags,
+  folded,
+  onFold,
+}: Page) {
+  const types = [...new Set(model.storages.map(storage => storage.type))]
+  return (
+    <Block
+      icon={Database}
+      title="Storages"
+      count={storages.length}
+      folded={folded.has('storages')}
+      onFold={() => onFold('storages')}
+      hint="Where the data marts live. Selecting one narrows the Data Marts block to what it holds, and the lines show which sources land in it."
+      toolbar={
+        <>
+          <MultiSelect
+            label="Type"
+            options={types.map(type => ({
+              value: type,
+              label: STORAGE[type]?.label ?? type,
+              count: model.storages.filter(storage => storage.type === type).length,
+              icon: STORAGE[type]?.icon ?? Database,
+            }))}
+            selected={storageTypes}
+            onChange={setStorageTypes}
+          />
+          <MultiSelect
+            label="Sharing"
+            options={STORAGE_FLAGS.map(flag => ({ value: flag.key, label: flag.label, group: flag.facet }))}
+            selected={storageFlags}
+            onChange={setStorageFlags}
+          />
+        </>
+      }
+    >
+      {storageCards.items.map(storage => (
+        <NodeCard
+          key={storage.id}
+          ctx={ctx}
+          drag={storageCards.dragProps(storage)}
+          state={state}
+          id={storeId(storage.id)}
+          mark={<Logo icon={STORAGE[storage.type]?.icon ?? Database} />}
+          title={storage.title}
+          hint={STORAGE[storage.type]?.label ?? storage.type}
+          badge={count(storage.marts, 'data mart')}
+          link={`/ui/${ctx.projectId}/data-storages?id=${encodeURIComponent(storage.id)}`}
+          linkTitle="Open this storage"
+        />
+      ))}
+      <AddCard ctx={ctx} to={`/ui/${ctx.projectId}/data-storages`} label="New storage" />
+    </Block>
+  )
+}
+
+function DataMartsBlock({ state, ctx, marts, martCards, martSearch, setMartSearch, flags, setFlags, limit, setLimit, onRecheck, checking, pending, folded, onFold, storageScopeTitle }: Page) {
   return (
     <Block
       id={MARTS}
       lit={state.lit?.has(MARTS)}
       icon={Box}
-      title="Data Marts"
+      title={storageScopeTitle ? `Data Marts · ${storageScopeTitle}` : 'Data Marts'}
       count={pending?.counts.marts ?? marts.length}
       loading={reading(pending)}
+      folded={folded.has('marts')}
+      onFold={() => onFold('marts')}
       action={<RecheckButton onRecheck={onRecheck} checking={checking} />}
       hint={`Ordered by how much depends on them, ${PAGE} at a time. A dashed line is a relationship — a join between two marts; selecting one brings the marts it joins onto the page.`}
       toolbar={
         <>
           <SearchBox value={martSearch} onChange={setMartSearch} label="Search data marts" />
-          <MultiSelect
-            label="Storage"
-            options={model.storages.map(storage => ({
-              value: storage.title,
-              label: storage.title,
-              count: storage.marts,
-              icon: STORAGE[storage.type]?.icon ?? Database,
-            }))}
-            selected={storages}
-            onChange={next => {
-              setStorages(next)
-              setLimit(PAGE)
-            }}
-          />
           <MultiSelect
             label="Filter"
             options={FLAGS.map(flag => ({ value: flag.key, label: flag.label, group: flag.facet }))}
@@ -592,13 +706,15 @@ function DataMartsBlock({ state, ctx, model, marts, martCards, martSearch, setMa
   )
 }
 
-function DestinationsBlock({ state, ctx, model, destinations, destinationCards, exitCards, types, setTypes, pending }: Page) {
+function DestinationsBlock({ state, ctx, model, destinations, destinationCards, exitCards, types, setTypes, pending, folded, onFold }: Page) {
   return (
     <Block
       icon={ArchiveRestore}
       title="Destinations"
       count={pending?.counts.destinations ?? destinations.length}
       loading={reading(pending)}
+      folded={folded.has('destinations')}
+      onFold={() => onFold('destinations')}
       hint="Where the reports go, badged with how many write to each. Claude, ChatGPT and the API are ways out that no endpoint lists — select them, or follow the link in the corner."
       toolbar={
         <MultiSelect
@@ -669,6 +785,8 @@ function ReportsBlock({
   reportLimit,
   setReportLimit,
   pending,
+  folded,
+  onFold,
 }: Page) {
   return (
     <Block
@@ -676,6 +794,8 @@ function ReportsBlock({
       title={selectedTitle ? `Reports · ${selectedTitle}` : 'Reports'}
       count={pending?.counts.reports ?? reports.length}
       loading={reading(pending)}
+      folded={folded.has('reports')}
+      onFold={() => onFold('reports')}
       hint={`The ${PAGE} most recently run reports. Select a data mart or a destination above and this block narrows to its reports.`}
       toolbar={
         <>

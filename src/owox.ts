@@ -88,6 +88,8 @@ export type Mart = {
   source?: string
   storage: string
   storageType: string
+  /** The storage that holds it. Two storages can share a title, so the id is what wires it. */
+  storageId?: string
   fields?: number
   quality?: QualitySummary
   freshness?: Freshness
@@ -129,10 +131,19 @@ export type Wire = {
   from: string
   to: string
   /** `dormant` is a route that exists but has never carried data: drawn only when selected. */
-  kind: 'source' | 'relationship' | 'report' | 'dormant' | 'run' | 'exit'
+  kind: 'source' | 'held' | 'relationship' | 'report' | 'dormant' | 'run' | 'exit'
 }
 
-export type Storage = { title: string; type: string; marts: number }
+export type Storage = {
+  id: string
+  title: string
+  type: string
+  marts: number
+  /** Every project member can build on it. */
+  sharedForUse: boolean
+  /** Technical users who do not own it can maintain it. */
+  sharedForMaintenance: boolean
+}
 
 export type Model = {
   sources: Source[]
@@ -153,6 +164,7 @@ export type Model = {
 }
 
 export const sourceId = (key: string) => `src-${key.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`
+export const storeId = (id: string) => `st-${id}`
 export const martId = (id: string) => `dm-${id}`
 export const destId = (id: string) => `dd-${id}`
 export const reportId = (id: string) => `rp-${id}`
@@ -177,6 +189,13 @@ type RawReport = {
   aggregationConfig?: unknown[]
   dataMart?: { id?: string; title?: string } | null
   dataDestinationAccess?: { id?: string; title?: string; type?: string } | null
+}
+type RawStorage = {
+  id: string
+  title: string
+  type: string
+  availableForUse?: boolean
+  availableForMaintenance?: boolean
 }
 type QualityRow = { dataMartId: string; summary?: QualitySummary | null }
 /**
@@ -225,7 +244,10 @@ async function perStorage(
   report: (fraction: number) => void = () => {},
 ) {
   const fields = new Map<string, number>()
+  /** Which storage holds which mart — the mart's own record names only a title, and titles repeat. */
+  const holder = new Map<string, string>()
   const edges: Array<{ from: string; to: string }> = []
+  const seenEdges = new Set<string>()
 
   // This read walks every storage, paging every mart in each — on a large project it is most of
   // the wait, so it reports where it has got to rather than landing as one step at the end.
@@ -241,7 +263,10 @@ async function perStorage(
       let total = Infinity
       while (seen < total) {
         const result = await ctx.owox.models.getDataMarts(storageId, offset)
-        for (const node of result.items) fields.set(node.id, node.fieldCount)
+        for (const node of result.items) {
+          fields.set(node.id, node.fieldCount)
+          holder.set(node.id, storageId)
+        }
         seen += result.items.length
         total = result.total
         // The edges call is the tail of each storage, so paging owns most of that storage's share.
@@ -252,13 +277,18 @@ async function perStorage(
     }, undefined)
     await optional(async () => {
       for (const edge of await ctx.owox.models.getEdges(storageId)) {
+        // One join, one line: a relationship reachable from two storages must not be counted twice,
+        // or the marts at its ends each gain a phantom neighbour.
+        const key = `${edge.sourceDataMartId}>${edge.targetDataMartId}`
+        if (seenEdges.has(key)) continue
+        seenEdges.add(key)
         edges.push({ from: edge.sourceDataMartId, to: edge.targetDataMartId })
       }
     }, undefined)
     walked += share
     report(walked)
   }
-  return { fields, edges }
+  return { fields, holder, edges }
 }
 
 /**
@@ -427,6 +457,7 @@ export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) =
         source: m.connectorSourceName,
         storage: m.storage?.title ?? 'Unknown storage',
         storageType: m.storage?.type ?? 'UNKNOWN',
+        storageId: canvas.holder.get(m.id),
         fields: canvas.fields.get(m.id),
         quality: qualityBy.get(m.id),
         freshness: (m.dataLastUpdated as Freshness | undefined) ?? undefined,
@@ -478,6 +509,7 @@ export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) =
     ])
   }
 
+  const storageList_ = storageList(storages as RawStorage[], marts)
   const wires = drawWires(marts, sources, destinationBy, edges, reports)
   const chains = traceChains(marts, sources, destinationBy, reports)
 
@@ -495,7 +527,7 @@ export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) =
       }))
       .sort((a, b) => b.reports - a.reports || a.title.localeCompare(b.title)),
     reports: reports.sort((a, b) => (b.lastRunAt ?? '').localeCompare(a.lastRunAt ?? '')),
-    storages: storageList(marts),
+    storages: storageList_,
     wires,
     chains,
   }
@@ -514,10 +546,18 @@ function drawWires(
 ): Wire[] {
   const known = new Set(marts.map(m => m.id))
   const wires: Wire[] = []
+  // A source lands in a storage, and the storage holds the mart. One line per source/storage pair
+  // rather than one per mart: a connector feeding forty marts into one storage is one arrow.
+  const landed = new Set<string>()
   for (const mart of marts) {
-    if (mart.source && sources.has(mart.source)) {
-      wires.push({ from: sourceId(mart.source), to: martId(mart.id), kind: 'source' })
+    if (mart.source && sources.has(mart.source) && mart.storageId) {
+      const key = `${mart.source}>${mart.storageId}`
+      if (!landed.has(key)) {
+        landed.add(key)
+        wires.push({ from: sourceId(mart.source), to: storeId(mart.storageId), kind: 'source' })
+      }
     }
+    if (mart.storageId) wires.push({ from: storeId(mart.storageId), to: martId(mart.id), kind: 'held' })
   }
   for (const edge of edges) {
     wires.push({ from: martId(edge.from), to: martId(edge.to), kind: 'relationship' })
@@ -568,6 +608,7 @@ function traceChains(
     chains.push(
       [
         mart?.source && sources.has(mart.source) ? sourceId(mart.source) : undefined,
+        mart?.storageId ? storeId(mart.storageId) : undefined,
         mart ? martId(mart.id) : undefined,
         destId(destination.id),
         reportId(report.id),
@@ -576,9 +617,13 @@ function traceChains(
   }
   // A mart with no reports still hangs off its source.
   for (const mart of marts) {
-    if (mart.reports === 0 && mart.source && sources.has(mart.source)) {
-      chains.push([sourceId(mart.source), martId(mart.id)])
-    }
+    if (mart.reports > 0) continue
+    const chain = [
+      mart.source && sources.has(mart.source) ? sourceId(mart.source) : undefined,
+      mart.storageId ? storeId(mart.storageId) : undefined,
+      martId(mart.id),
+    ].filter((id): id is string => Boolean(id))
+    if (chain.length > 1) chains.push(chain)
   }
 
   return chains
@@ -600,14 +645,24 @@ function order(a: Mart, b: Mart) {
 }
 
 /** One row per storage the visible marts live in, with the type its icon comes from. */
-function storageList(marts: Mart[]): Storage[] {
-  const storages = new Map<string, Storage>()
-  for (const mart of marts) {
-    const storage = storages.get(mart.storage) ?? { title: mart.storage, type: mart.storageType, marts: 0 }
-    storage.marts += 1
-    storages.set(mart.storage, storage)
-  }
-  return [...storages.values()].sort((a, b) => b.marts - a.marts || a.title.localeCompare(b.title))
+/**
+ * One card per storage the project has, counting the marts this member can actually see.
+ *
+ * Built from the storage endpoint rather than inferred from the marts: it is the only place the
+ * ids, the sharing flags and the empty storages exist. Two storages may carry the same title.
+ */
+function storageList(raw: RawStorage[], marts: Mart[]): Storage[] {
+  const held = tally(marts.map(mart => mart.storageId))
+  return raw
+    .map(storage => ({
+      id: storage.id,
+      title: storage.title,
+      type: storage.type,
+      marts: held.get(storage.id) ?? 0,
+      sharedForUse: storage.availableForUse === true,
+      sharedForMaintenance: storage.availableForMaintenance === true,
+    }))
+    .sort((a, b) => b.marts - a.marts || a.title.localeCompare(b.title))
 }
 
 function tally(keys: Array<string | undefined>) {

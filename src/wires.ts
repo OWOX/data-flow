@@ -10,7 +10,8 @@ const NS = 'http://www.w3.org/2000/svg'
 
 /** What each line is, for the tooltip it carries — lines pass under cards, so they must say. */
 const MEANING: Record<Wire['kind'], string> = {
-  source: 'Source → data mart: the connector that feeds it',
+  source: 'Source → storage: the connector pulls into it',
+  held: 'Storage → data mart: the storage this mart lives in',
   relationship: 'Relationship: a join between two data marts',
   report: 'Route: a report runs this data mart into that destination',
   dormant: 'Route never run: the report exists, but has never carried data',

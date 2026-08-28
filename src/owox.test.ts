@@ -19,10 +19,20 @@ const ctx = (over: Record<string, unknown> = {}) => {
         { id: 'd3', title: 'Looker', type: 'LOOKER_STUDIO' },
       ],
     },
-    storages: { list: async () => [{ id: 's1', title: 'BQ', type: 'GOOGLE_BIGQUERY' }] },
+    storages: {
+      list: async () => [
+        { id: 's1', title: 'BQ', type: 'GOOGLE_BIGQUERY', availableForUse: true, availableForMaintenance: false },
+        { id: 's2', title: 'Athena', type: 'AWS_ATHENA', availableForUse: false, availableForMaintenance: false },
+      ],
+    },
     models: {
-      getDataMarts: async () => ({ items: [{ id: 'm1', fieldCount: 42 }], total: 1, nextOffset: null }),
-      // m3 joins m1: m1 gains an inbound relationship, m3 an outbound one.
+      // The only place a mart's storage is stated: its own record names a title, and titles repeat.
+      getDataMarts: async (storageId: string) =>
+        storageId === 's1'
+          ? { items: [{ id: 'm1', fieldCount: 42 }, { id: 'm2', fieldCount: 7 }], total: 2, nextOffset: null }
+          : { items: [{ id: 'm3', fieldCount: 3 }], total: 1, nextOffset: null },
+      // m3 joins m1: m1 gains an inbound relationship, m3 an outbound one. Both storages report
+      // it, as a cross-storage join would, and it must still draw one line.
       getEdges: async () => [{ id: 'e1', sourceDataMartId: 'm3', targetDataMartId: 'm1', joinConditions: [] }],
     },
     getJson: async (path: string) =>
@@ -88,10 +98,10 @@ test('the whole graph: cards, order, badges and lines', async () => {
   assert.equal(model.marts[1].outbound, 1)
   assert.equal(model.marts[2].draft, true)
   assert.deepEqual(
-    model.storages.map(s => [s.title, s.type, s.marts]),
+    model.storages.map(s => [s.id, s.title, s.marts, s.sharedForUse]),
     [
-      ['BigQuery', 'GOOGLE_BIGQUERY', 2],
-      ['Athena', 'AWS_ATHENA', 1],
+      ['s1', 'BQ', 2, true],
+      ['s2', 'Athena', 1, false],
     ],
   )
 
@@ -121,8 +131,11 @@ test('the whole graph: cards, order, badges and lines', async () => {
   assert.deepEqual(model.reports.map(r => r.id), ['r2', 'r1', 'r3', 'r4', 'r5'])
 
   assert.deepEqual(model.wires, [
-    { from: 'src-facebookads', to: 'dm-m1', kind: 'source' },
-    { from: 'src-facebookads', to: 'dm-m2', kind: 'source' },
+    // Marts are walked in card order — m1, m3, m2 — so the lines fall in that order too.
+    { from: 'src-facebookads', to: 'st-s1', kind: 'source' },
+    { from: 'st-s1', to: 'dm-m1', kind: 'held' },
+    { from: 'st-s2', to: 'dm-m3', kind: 'held' },
+    { from: 'st-s1', to: 'dm-m2', kind: 'held' },
     { from: 'dm-m3', to: 'dm-m1', kind: 'relationship' },
     { from: 'dm-m1', to: 'dd-d1', kind: 'report' },
     { from: 'dm-m1', to: 'dd-d2', kind: 'report' },
@@ -139,7 +152,8 @@ test('the whole graph: cards, order, badges and lines', async () => {
   // A report reaches back to the one data mart that feeds it, and on to its source.
   assert.deepEqual(
     model.chains.filter(chain => chain.includes('rp-r1')),
-    [['src-facebookads', 'dm-m1', 'dd-d1', 'rp-r1']],
+    // The chain runs through the storage the mart lives in.
+    [['src-facebookads', 'st-s1', 'dm-m1', 'dd-d1', 'rp-r1']],
   )
 })
 
@@ -173,7 +187,8 @@ test('an endpoint the member cannot read costs only its own detail', async () =>
   // No /api/connectors: the raw connector name still names the source.
   assert.deepEqual(model.sources.map(s => s.name), ['FacebookAds'])
   // Only the source lines survive: joins, routes and runs all come from endpoints that failed.
-  assert.deepEqual(model.wires.map(w => w.kind), ['source', 'source'])
+  // Without the storage walk no mart knows its storage, so nothing routes through one.
+  assert.deepEqual(model.wires.map(w => w.kind), [])
 })
 
 
