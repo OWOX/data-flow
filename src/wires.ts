@@ -206,8 +206,10 @@ export function useWires(
     }
     const click = (e: MouseEvent) => {
       const target = e.target as HTMLElement
-      // Links and controls are there to be used, not to move the pin.
-      if (target.closest('a, button, summary, input, label')) return
+      // Links and controls are there to be used, not to move the pin — and a block header is one
+      // of them now, since its empty space folds the block. Putting cards away is not a reason to
+      // forget which one was chosen: unfolding hands the selection back exactly as it was.
+      if (target.closest('a, button, summary, input, label, .dm-band-head')) return
       const card = target.closest<HTMLElement>('[data-node]')
       if (card) onPin(card.id === pinned ? null : card.id)
       // Anything that is not a card clears the selection: the gaps between them, a block's own
