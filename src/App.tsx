@@ -48,7 +48,24 @@ const PAGE = 25
  * Options inside one facet are alternatives — "Draft" or "Published" — so they widen the result.
  * Facets narrow it: choosing Draft and With reports asks for both.
  */
-const FLAGS: Array<{ key: string; facet: string; label: string; test: (mart: Mart) => boolean }> = [
+/**
+ * One attribute filter, in facets.
+ *
+ * Options inside one facet are alternatives, so they widen the result; facets narrow it. A facet
+ * with nothing ticked asks for nothing and gets nothing. Three tables follow this shape, so the
+ * rule is written once and handed each of them.
+ */
+type Flag<T> = { key: string; facet: string; label: string; test: (item: T) => boolean }
+
+const facetFilter = <T,>(flags: Array<Flag<T>>) => {
+  const facets = [...new Set(flags.map(flag => flag.facet))]
+  return (chosen: string[]) => {
+    const picked = flags.filter(flag => chosen.includes(flag.key))
+    return (item: T) => facets.every(facet => picked.some(flag => flag.facet === facet && flag.test(item)))
+  }
+}
+
+const FLAGS: Array<Flag<Mart>> = [
   { key: 'rel', facet: 'relationships', label: 'With relationship', test: m => m.inbound + m.outbound > 0 },
   { key: 'no-rel', facet: 'relationships', label: 'Without relationship', test: m => m.inbound + m.outbound === 0 },
   { key: 'published', facet: 'status', label: 'Published', test: m => !m.draft },
@@ -109,7 +126,6 @@ const EXIT_TYPES = [
   { type: 'API', label: 'API', icon: KeyRound },
 ].map(row => ({ ...row, destinations: EXITS.filter(exit => exit.type === row.type).length }))
 
-const FACETS = [...new Set(FLAGS.map(flag => flag.facet))]
 
 /**
  * The Data Marts block itself, as one end of a wire.
@@ -139,19 +155,22 @@ const EXIT_WIRES: Wire[] = EXITS.map(exit => ({ from: exit.id, to: MARTS, kind: 
  * Type is the one thing a storage is, and sharing is the one thing it grants — OWOX's own words:
  * a storage everyone may build on, and one other technical users may maintain.
  */
-const STORAGE_FLAGS: Array<{ key: string; facet: string; label: string; test: (s: Storage) => boolean }> = [
+const STORAGE_FLAGS: Array<Flag<Storage>> = [
   { key: 'use', facet: 'sharing', label: 'Shared for use', test: s => s.sharedForUse },
   { key: 'no-use', facet: 'sharing', label: 'Not shared for use', test: s => !s.sharedForUse },
   { key: 'maint', facet: 'maintenance', label: 'Shared for maintenance', test: s => s.sharedForMaintenance },
   { key: 'no-maint', facet: 'maintenance', label: 'Not shared for maintenance', test: s => !s.sharedForMaintenance },
 ]
-const STORAGE_FACETS = [...new Set(STORAGE_FLAGS.map(flag => flag.facet))]
 
 /** The Reports block's own filter: the one thing about a report that is not on its card's face. */
-const REPORT_FLAGS: Array<{ key: string; label: string; test: (report: Report) => boolean }> = [
-  { key: 'triggers', label: 'With triggers', test: report => (report.schedule?.total ?? 0) > 0 },
-  { key: 'no-triggers', label: 'Without triggers', test: report => !report.schedule?.total },
+const REPORT_FLAGS: Array<Flag<Report>> = [
+  { key: 'triggers', facet: 'triggers', label: 'With triggers', test: report => (report.schedule?.total ?? 0) > 0 },
+  { key: 'no-triggers', facet: 'triggers', label: 'Without triggers', test: report => !report.schedule?.total },
 ]
+
+const martPasses = facetFilter(FLAGS)
+const storagePasses = facetFilter(STORAGE_FLAGS)
+const reportPasses = facetFilter(REPORT_FLAGS)
 
 /** Everything the four blocks read. Canvas works it out; each block takes the whole thing. */
 type Page = {
@@ -168,7 +187,7 @@ type Page = {
   setStorageFlags: (value: string[]) => void
   folded: Set<string>
   onFold: (block: string) => void
-  bandLit: (block: keyof typeof BANDS) => boolean
+  band: (block: keyof typeof BANDS) => Record<string, unknown>
   storageScopeTitle?: string
   marts: Mart[]
   martCards: Cards<Mart>
@@ -382,24 +401,19 @@ function Canvas({
   }, [])
 
   const marts = useMemo(() => {
-    const chosen = FLAGS.filter(flag => flags.includes(flag.key))
+    const passes = martPasses(flags)
     const needle = martSearch.trim().toLowerCase()
     return model.marts.filter(
       mart =>
         (!storageScope || mart.storageId === storageScope) &&
         (needle === '' || mart.title.toLowerCase().includes(needle)) &&
-        // A facet with nothing ticked asks for nothing, so nothing is what it gets.
-        FACETS.every(facet => chosen.some(flag => flag.facet === facet && flag.test(mart))),
+        passes(mart),
     )
   }, [model.marts, storageScope, flags, martSearch])
 
   const storagesMatching = useMemo(() => {
-    const chosen = STORAGE_FLAGS.filter(flag => storageFlags.includes(flag.key))
-    return model.storages.filter(
-      storage =>
-        storageTypes.includes(storage.type) &&
-        STORAGE_FACETS.every(facet => chosen.some(flag => flag.facet === facet && flag.test(storage))),
-    )
+    const passes = storagePasses(storageFlags)
+    return model.storages.filter(storage => storageTypes.includes(storage.type) && passes(storage))
   }, [model.storages, storageTypes, storageFlags])
   const storageList = showEmptyStorages ? storagesMatching : storagesMatching.filter(s => s.marts > 0)
 
@@ -414,14 +428,13 @@ function Canvas({
 
   const reports = useMemo(() => {
     const needle = reportSearch.trim().toLowerCase()
-    const chosen = REPORT_FLAGS.filter(flag => reportFlags.includes(flag.key))
+    const passes = reportPasses(reportFlags)
     return model.reports.filter(
       report =>
         (!selectedMart || report.martId === selectedMart) &&
         (!selectedDestination || report.destinationId === selectedDestination) &&
         (needle === '' || reportName(report).toLowerCase().includes(needle)) &&
-        // Nothing ticked asks for nothing, as in the Data Marts filter.
-        chosen.some(flag => flag.test(report)),
+        passes(report),
     )
   }, [model.reports, selectedMart, selectedDestination, reportSearch, reportFlags])
 
@@ -495,10 +508,28 @@ function Canvas({
    * filter or a drag re-renders the block and would wipe anything set by hand.
    */
   const bandLit = (block: keyof typeof BANDS) => {
+    // The block is itself an end of a wire — which is what an exit selection lights.
+    if (state.lit?.has(BANDS[block].id)) return true
     if (!folded.has(block) || !state.lit) return false
     const prefixes = BANDS[block].holds.split(',')
     return [...state.lit].some(id => prefixes.some(prefix => id.startsWith(prefix)))
   }
+
+  /**
+   * Everything a block takes from the page, in one place.
+   *
+   * These five travelled as five props on five blocks, and twice a block quietly went without one:
+   * Storages drew its cards while the project was still loading, and Data Marts needed its `lit`
+   * written by hand to keep the exits working.
+   */
+  const band = (block: keyof typeof BANDS) => ({
+    id: BANDS[block].id,
+    holds: BANDS[block].holds,
+    folded: folded.has(block),
+    onFold: () => onFold(block),
+    lit: bandLit(block),
+    loading: reading(pending),
+  })
 
   const revision = [sourceCards, storageCards, martCards, destinationCards, exitCards, reportCards]
     .map(block => block.key)
@@ -520,7 +551,7 @@ function Canvas({
     setStorageFlags,
     folded,
     onFold,
-    bandLit,
+    band,
     marts,
     martCards,
     martSearch,
@@ -580,18 +611,13 @@ function Canvas({
   )
 }
 
-function SourcesBlock({ state, ctx, model, sourceCards, pending, folded, onFold, bandLit }: Page) {
+function SourcesBlock({ state, ctx, model, sourceCards, pending, band }: Page) {
   return (
     <Block
-      id={BANDS.sources.id}
-      holds={BANDS.sources.holds}
+      {...band('sources')}
       icon={Plug}
       title="Sources"
       count={pending?.counts.sources ?? model.sources.length}
-      loading={reading(pending)}
-      lit={bandLit('sources')}
-      folded={folded.has('sources')}
-      onFold={() => onFold('sources')}
       hint="The connectors this project pulls from. One card per source, badged with how many data marts it feeds — its line runs to the storage it lands in, not straight to those marts."
     >
       {sourceCards.items.map(source => (
@@ -650,22 +676,15 @@ function StoragesBlock({
   setStorageTypes,
   storageFlags,
   setStorageFlags,
-  folded,
-  onFold,
-  bandLit,
+  band,
 }: Page) {
   const types = [...new Set(model.storages.map(storage => storage.type))]
   return (
     <Block
-      id={BANDS.storages.id}
-      holds={BANDS.storages.holds}
+      {...band('storages')}
       icon={Database}
       title="Storages"
       count={pending?.counts.storages ?? storages.length}
-      loading={reading(pending)}
-      lit={bandLit('storages')}
-      folded={folded.has('storages')}
-      onFold={() => onFold('storages')}
       hint="Where the data marts live. Selecting one narrows the Data Marts block to what it holds, and the lines show which sources land in it."
       toolbar={
         <>
@@ -716,18 +735,13 @@ function StoragesBlock({
   )
 }
 
-function DataMartsBlock({ state, ctx, marts, martCards, martSearch, setMartSearch, flags, setFlags, limit, setLimit, onRecheck, checking, pending, folded, onFold, bandLit, storageScopeTitle }: Page) {
+function DataMartsBlock({ state, ctx, marts, martCards, martSearch, setMartSearch, flags, setFlags, limit, setLimit, onRecheck, checking, pending, band, storageScopeTitle }: Page) {
   return (
     <Block
-      id={MARTS}
-      holds={BANDS.marts.holds}
-      lit={state.lit?.has(MARTS) || bandLit('marts')}
+      {...band('marts')}
       icon={Box}
       title={storageScopeTitle ? `Data Marts · ${storageScopeTitle}` : 'Data Marts'}
       count={pending?.counts.marts ?? marts.length}
-      loading={reading(pending)}
-      folded={folded.has('marts')}
-      onFold={() => onFold('marts')}
       action={<RecheckButton onRecheck={onRecheck} checking={checking} />}
       hint={`Ordered by how much depends on them, ${PAGE} at a time. A dashed line is a relationship — a join between two marts; selecting one brings the marts it joins onto the page.`}
       toolbar={
@@ -759,18 +773,13 @@ function DataMartsBlock({ state, ctx, marts, martCards, martSearch, setMartSearc
   )
 }
 
-function DestinationsBlock({ state, ctx, model, destinations, destinationCards, exitCards, types, setTypes, pending, folded, onFold, bandLit }: Page) {
+function DestinationsBlock({ state, ctx, model, destinations, destinationCards, exitCards, types, setTypes, pending, band }: Page) {
   return (
     <Block
-      id={BANDS.destinations.id}
-      holds={BANDS.destinations.holds}
+      {...band('destinations')}
       icon={ArchiveRestore}
       title="Destinations"
       count={pending?.counts.destinations ?? destinations.length}
-      loading={reading(pending)}
-      lit={bandLit('destinations')}
-      folded={folded.has('destinations')}
-      onFold={() => onFold('destinations')}
       hint="Where the reports go, badged with how many write to each. Claude, ChatGPT and the API are ways out that no endpoint lists — select them, or follow the link in the corner."
       toolbar={
         <MultiSelect
@@ -841,21 +850,14 @@ function ReportsBlock({
   reportLimit,
   setReportLimit,
   pending,
-  folded,
-  onFold,
-  bandLit,
+  band,
 }: Page) {
   return (
     <Block
-      id={BANDS.reports.id}
-      holds={BANDS.reports.holds}
+      {...band('reports')}
       icon={FileText}
       title={selectedTitle ? `Reports · ${selectedTitle}` : 'Reports'}
       count={pending?.counts.reports ?? reports.length}
-      loading={reading(pending)}
-      lit={bandLit('reports')}
-      folded={folded.has('reports')}
-      onFold={() => onFold('reports')}
       hint={`The ${PAGE} most recently run reports. Select a data mart or a destination above and this block narrows to its reports.`}
       toolbar={
         <>
