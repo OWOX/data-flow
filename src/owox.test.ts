@@ -191,11 +191,15 @@ test('an endpoint the member cannot read costs only its own detail', async () =>
   assert.equal(model.reports.length, 0)
   // No /api/connectors: the raw connector name still names the source.
   assert.deepEqual(model.sources.map(s => s.name), ['FacebookAds'])
-  // Only the source lines survive: joins, routes and runs all come from endpoints that failed.
-  // Without the storage walk a mart falls back to matching its storage by title and type. m3's
-  // "Athena" names exactly one storage, so it is still placed; m1 and m2 say "BigQuery", which
-  // matches no storage in this project, so they are left unplaced rather than guessed at.
-  assert.deepEqual(model.wires.map(w => w.kind), ['held'])
+  // Joins, routes and runs all come from endpoints that failed. What is left is the way in: m3's
+  // "Athena" names exactly one storage so it is placed by title and type, while m1 and m2 say
+  // "BigQuery", which matches none — those two hang off the Storages block instead of nothing, and
+  // the source that fills them reaches it.
+  assert.deepEqual(model.wires.map(w => w.kind), ['source', 'held', 'held', 'held'])
+  assert.deepEqual(
+    model.wires.filter(w => w.kind === 'held').map(w => [w.from, w.to]),
+    [['storages-block', 'dm-m1'], ['st-s2', 'dm-m3'], ['storages-block', 'dm-m2']],
+  )
   assert.deepEqual(
     model.marts.map(m => [m.id, m.storageId]),
     [['m1', undefined], ['m3', 's2'], ['m2', undefined]],
@@ -246,7 +250,7 @@ test('worst outranks by severity and ignores idle', () => {
   assert.equal(worst([tone(['FAILED']), qualityTone('idle')]), 'bad')
 })
 
-test('a report whose destination is invisible still hangs off the mart it reads', async () => {
+test('a report whose destination is invisible is reached through the block', async () => {
   const model = await loadModel(
     ctx({
       getJson: async (path: string) =>
@@ -264,9 +268,15 @@ test('a report whose destination is invisible still hangs off the mart it reads'
     }),
   )
 
+  // The destination is real to OWOX and unreadable here, so the block stands where it would be:
+  // the mart writes into one of them, and one of them runs the report.
   assert.deepEqual(
     model.wires.filter(w => w.to === 'rp-r9'),
-    [{ from: 'dm-m1', to: 'rp-r9', kind: 'direct' }],
+    [{ from: 'destinations-block', to: 'rp-r9', kind: 'run' }],
+  )
+  assert.deepEqual(
+    model.wires.filter(w => w.from === 'dm-m1').map(w => [w.to, w.kind]),
+    [['destinations-block', 'dormant']],
   )
   // Selecting the source still reaches the report, across the gap where the destination would be.
   const { lit } = reach(model.wires, model.chains, 'src-facebookads')

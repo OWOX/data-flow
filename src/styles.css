@@ -60,9 +60,6 @@ body { margin: 0; color: var(--foreground); }
 /* Blue crosses a block boundary — a source feeding a mart, a mart reaching a destination, a
    destination running a report. Grey stays inside the Data Marts block: a join between two marts. */
 #wires .source, #wires .held, #wires .report, #wires .dormant, #wires .run { stroke: var(--primary); }
-/* A report whose destination is not visible: it still reads a mart, drawn plainly so the gap in
-   the middle is not mistaken for a route. */
-#wires .direct { stroke: var(--muted-foreground); }
 #wires .relationship, #wires .exit { stroke: var(--muted-foreground); }
 
 #wires path.lit { opacity: 1; }
