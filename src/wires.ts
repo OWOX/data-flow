@@ -362,14 +362,25 @@ export function useWires(
      * `aria-pressed` on every re-render, so anything written here by hand would be wiped the next
      * time a filter, a search or a drag re-rendered the block.
      */
-    const focus = (id: string | null) => {
-      canvas.classList.toggle('focused', Boolean(id))
-      const { lit, links } = id
-        ? reach(wires, chains, id)
-        : { lit: new Set<string>(), links: new Set<string>() }
+    const nothing = () => ({ lit: new Set<string>(), links: new Set<string>() })
+    /**
+     * What the chosen card reaches, and what the pointer's card reaches beside it.
+     *
+     * A selection keeps its lines whatever the pointer is doing — that is what choosing one is for
+     * — so the pointer's card cannot take them away, only add its own alongside in grey. Grey
+     * because there is already a colour that means "this is the one you picked", and two blue
+     * fans on the same canvas say nothing about which is which.
+     */
+    const focus = (pinnedId: string | null, hoveredId: string | null) => {
+      const beside = hoveredId && hoveredId !== pinnedId ? hoveredId : null
+      canvas.classList.toggle('focused', Boolean(pinnedId ?? beside))
+      const chosen = pinnedId ? reach(wires, chains, pinnedId) : nothing()
+      const grazed = beside ? reach(wires, chains, beside) : nothing()
       // What is on the page, asked once rather than once per stand-in per lit id.
       const here = onPage(canvas)
       const stands = standIns(canvas)
+      // Both are readable: the point of hovering a second card is to see what it touches.
+      const lit = new Set([...chosen.lit, ...grazed.lit])
       const missing = [...lit].filter(node => !here.has(node))
       for (const el of cards()) {
         // Whatever stands in for a lit card takes the border that card would have taken, so the
@@ -380,31 +391,40 @@ export function useWires(
         )
         el.classList.toggle('lit', lit.has(el.id) || standsFor)
       }
-      for (const path of alight) path.classList.remove('lit', 'outbound', 'inbound')
+      for (const path of alight) path.classList.remove('lit', 'outbound', 'inbound', 'aside')
       alight = []
-      if (id === null) return
       const lead = leads.current
       // A thousand wires between the same two boxes light the one line that stands for them all.
       const on = new Set<SVGPathElement>()
-      // Direction is read from the card in hand: a line that leaves it is solid, one that arrives
-      // at it is dashed. A line lit through a chain touches neither end, and stays solid.
-      for (const path of byId.get(id) ?? []) {
-        const line = lead.get(path)
-        if (!line || on.has(line)) continue
-        on.add(line)
-        line.classList.add('lit', path.dataset.from === id ? 'outbound' : 'inbound')
-        alight.push(line)
-      }
-      for (const key of links) {
-        for (const path of byPair.get(key) ?? []) {
+      const paint = (id: string | null, links: Set<string>, grey: boolean) => {
+        if (id === null) return
+        // Direction is read from the card in hand: a line that leaves it is solid, one that
+        // arrives at it is dashed. A line lit through a chain touches neither end, stays solid.
+        for (const path of byId.get(id) ?? []) {
           const line = lead.get(path)
-          // A line can be both an end of the pinned card and a link on its chain; already on.
           if (!line || on.has(line)) continue
           on.add(line)
-          line.classList.add('lit')
+          line.classList.add('lit', path.dataset.from === id ? 'outbound' : 'inbound')
+          if (grey) line.classList.add('aside')
           alight.push(line)
         }
+        for (const key of links) {
+          for (const path of byPair.get(key) ?? []) {
+            const line = lead.get(path)
+            // A line can be both an end of the chosen card and a link on its chain; already on.
+            if (!line || on.has(line)) continue
+            on.add(line)
+            line.classList.add('lit')
+            if (grey) line.classList.add('aside')
+            alight.push(line)
+          }
+        }
       }
+      // The selection paints first, so a line both cards share keeps the colour of the one chosen.
+      // With nothing chosen there is nothing to tell the pointer's lines apart from, so they are
+      // the plain ones: grey only ever means "not the card you picked".
+      paint(pinnedId, chosen.links, false)
+      paint(beside, grazed.links, pinnedId !== null)
     }
 
     /**
@@ -414,28 +434,23 @@ export function useWires(
      * relightings inside one frame and only the last one is ever seen. Coalescing them is what
      * keeps a fast pointer from being more work than a slow one.
      */
-    let wanted: string | null = null
     let queued = 0
-    const relight = (id: string | null) => {
-      wanted = id
+    const relight = () => {
       queued ||= requestAnimationFrame(() => {
         queued = 0
-        focus(wanted)
+        focus(pinned, hovered.current)
       })
     }
-    lightAgain.current = () => focus(hovered.current ?? pinned)
-    focus(hovered.current ?? pinned)
+    lightAgain.current = () => focus(pinned, hovered.current)
+    focus(pinned, hovered.current)
 
-    // The pointer outranks the selection while it rests on a card, and hands it straight back when
-    // it moves off one: a selection that made every other card unreadable was answering a question
-    // nobody asked twice.
     const enter = (e: Event) => {
       hovered.current = (e.target as HTMLElement).closest<HTMLElement>('[data-node]')?.id ?? null
-      relight(hovered.current ?? pinned)
+      relight()
     }
     const leave = () => {
       hovered.current = null
-      relight(pinned)
+      relight()
     }
     const click = (e: MouseEvent) => {
       const target = e.target as HTMLElement
