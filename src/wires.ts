@@ -367,9 +367,9 @@ export function useWires(
      * What the chosen card reaches, and what the pointer's card reaches beside it.
      *
      * A selection keeps its lines whatever the pointer is doing — that is what choosing one is for
-     * — so the pointer's card cannot take them away, only add its own alongside in grey. Grey
-     * because there is already a colour that means "this is the one you picked", and two blue
-     * fans on the same canvas say nothing about which is which.
+     * — so the pointer's card cannot take them away, only add its own alongside, faded. Faded
+     * rather than recoloured: colour already says what a line is, blue across blocks and grey for
+     * a join, and a line that changed colour to mean "second" would be lying about its kind.
      */
     const focus = (pinnedId: string | null, hoveredId: string | null) => {
       const beside = hoveredId && hoveredId !== pinnedId ? hoveredId : null
@@ -396,7 +396,7 @@ export function useWires(
       const lead = leads.current
       // A thousand wires between the same two boxes light the one line that stands for them all.
       const on = new Set<SVGPathElement>()
-      const paint = (id: string | null, links: Set<string>, grey: boolean) => {
+      const paint = (id: string | null, links: Set<string>, faded: boolean) => {
         if (id === null) return
         // Direction is read from the card in hand: a line that leaves it is solid, one that
         // arrives at it is dashed. A line lit through a chain touches neither end, stays solid.
@@ -405,7 +405,7 @@ export function useWires(
           if (!line || on.has(line)) continue
           on.add(line)
           line.classList.add('lit', path.dataset.from === id ? 'outbound' : 'inbound')
-          if (grey) line.classList.add('aside')
+          if (faded) line.classList.add('aside')
           alight.push(line)
         }
         for (const key of links) {
@@ -415,14 +415,14 @@ export function useWires(
             if (!line || on.has(line)) continue
             on.add(line)
             line.classList.add('lit')
-            if (grey) line.classList.add('aside')
+            if (faded) line.classList.add('aside')
             alight.push(line)
           }
         }
       }
       // The selection paints first, so a line both cards share keeps the colour of the one chosen.
       // With nothing chosen there is nothing to tell the pointer's lines apart from, so they are
-      // the plain ones: grey only ever means "not the card you picked".
+      // drawn at full strength: fading only ever means "not the card you picked".
       paint(pinnedId, chosen.links, false)
       paint(beside, grazed.links, pinnedId !== null)
     }

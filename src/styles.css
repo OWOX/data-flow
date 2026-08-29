@@ -63,9 +63,11 @@ body { margin: 0; color: var(--foreground); }
 #wires .relationship, #wires .exit { stroke: var(--muted-foreground); }
 
 #wires path.lit { opacity: 1; }
-/* A second card's lines, while another is chosen: drawn, but plainly not the ones asked for.
-   Later than the rules above and one tag heavier, so it beats whatever colour the kind gives. */
-#wires path.aside { stroke: var(--muted-foreground); }
+/* A second card's lines, while another is chosen: the lines they always were, at half strength.
+   Colour still says what a line is — blue across blocks, grey for a join — so it cannot also say
+   which card asked for it; fading does that instead, and leaves the kind readable.
+   One class heavier than the `.lit` above and later, so it wins the opacity. */
+#wires path.lit.aside { opacity: 0.5; }
 /* A route no report has ever run: drawn, but plainly not carrying anything. */
 #wires .dormant.lit { opacity: 0.45; }
 
