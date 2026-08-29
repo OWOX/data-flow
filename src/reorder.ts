@@ -23,8 +23,14 @@ export type DragProps = {
 /** What a block hands to its cards: the items in order, and how to drag one. */
 export type Cards<T> = { items: T[]; dragProps: (item: T) => DragProps; key: string }
 
-/** Long enough to read as motion, short enough that nobody waits for it. */
-const LEAVING_MS = 250
+/**
+ * How long the classes that drive the transitions stay on.
+ *
+ * Long enough to read as motion, short enough that nobody waits for it — and never shorter than
+ * the longest animation it has to cover, or that one is cut off partway. The turn takes 300ms;
+ * growing in and collapsing out take 250 and simply finish early.
+ */
+const SETTLE_MS = 300
 
 export function useReorder<T>(items: T[], idOf: (item: T) => string): Cards<T> {
   const [order, setOrder] = useState<string[]>([])
@@ -90,7 +96,7 @@ export function useReorder<T>(items: T[], idOf: (item: T) => string): Cards<T> {
       setTurning(new Set())
       setEntering(new Set())
       setLeaving([])
-    }, LEAVING_MS)
+    }, SETTLE_MS)
   }, [items, idOf])
 
   useEffect(() => () => clearTimeout(settling.current), [])

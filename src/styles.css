@@ -174,7 +174,7 @@ body { margin: 0; color: var(--foreground); }
   to { transform: perspective(700px) rotateY(0); opacity: 1; }
 }
 .dm-band-grid > .dm-entering { animation: dm-card-in 250ms ease-out; }
-.dm-band-grid > .dm-turning { animation: dm-card-turn 250ms ease-out; backface-visibility: hidden; }
+.dm-band-grid > .dm-turning { animation: dm-card-turn 300ms ease-out; backface-visibility: hidden; }
 .dm-band-grid > .dm-leaving { animation: dm-card-out 250ms ease-in forwards; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) {
   .dm-band-grid > .dm-entering,
