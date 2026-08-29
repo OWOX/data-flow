@@ -119,6 +119,51 @@ export type Mart = {
   outbound: number
   reports: number
   errors: boolean
+  people: Party[]
+}
+
+/**
+ * Someone a thing records: who made it, or who owns it.
+ *
+ * The API guarantees only the id, so the name falls back through the email and then to nothing
+ * worth printing, and the avatar is a URL that may not be there at all.
+ */
+export type Person = { id: string; name: string; avatar?: string }
+/** One role and everyone holding it. A role nobody holds is dropped rather than shown empty. */
+export type Party = { role: string; who: Person[] }
+
+type RawUser = { userId?: string; fullName?: string | null; email?: string | null; avatar?: string | null }
+type RawOwned = {
+  createdByUser?: RawUser | null
+  ownerUsers?: RawUser[]
+  businessOwnerUsers?: RawUser[]
+  technicalOwnerUsers?: RawUser[]
+}
+
+const person = (raw: RawUser): Person => ({
+  id: raw.userId ?? '',
+  name: raw.fullName || raw.email || 'Unnamed user',
+  avatar: raw.avatar ?? undefined,
+})
+
+/**
+ * Who a thing belongs to, in the order a reader wants it: whoever made it, then whoever owns it.
+ *
+ * Every list the page already reads carries these — a data mart names business and technical
+ * owners separately, a storage, destination and report name one set — so none of this costs a
+ * request.
+ */
+function owners(raw: unknown): Party[] {
+  const held = (raw ?? {}) as RawOwned
+  const roles: Array<[string, RawUser[] | undefined]> = [
+    ['Created by', held.createdByUser ? [held.createdByUser] : undefined],
+    ['Owners', held.ownerUsers],
+    ['Business owners', held.businessOwnerUsers],
+    ['Technical owners', held.technicalOwnerUsers],
+  ]
+  return roles
+    .filter(([, who]) => who?.length)
+    .map(([role, who]) => ({ role, who: who!.map(person) }))
 }
 
 export type DestinationType = { type: string; destinations: number }
@@ -132,6 +177,7 @@ export type Destination = {
   sharedForUse: boolean
   /** Technical users who do not own it can maintain it. */
   sharedForMaintenance: boolean
+  people: Party[]
 }
 
 export type Report = {
@@ -152,6 +198,7 @@ export type Report = {
   postJoin: number
   aggregations: number
   tone: Tone
+  people: Party[]
 }
 
 export type Wire = {
@@ -170,6 +217,7 @@ export type Storage = {
   sharedForUse: boolean
   /** Technical users who do not own it can maintain it. */
   sharedForMaintenance: boolean
+  people: Party[]
 }
 
 export type Model = {
@@ -524,6 +572,7 @@ export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) =
   }
 
   const reports: Report[] = rawReports.map((report, i) => ({
+    people: owners(report),
     id: report.id ?? `report-${i}`,
     title: report.title ?? 'Untitled report',
     martId: report.dataMart?.id,
@@ -564,6 +613,7 @@ export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) =
         triggers: m.triggersCount ?? 0,
         sharedForReporting: m.availableForReporting === true,
         sharedForMaintenance: m.availableForMaintenance === true,
+        people: owners(m),
         inbound: inbound.get(m.id) ?? 0,
         outbound: outbound.get(m.id) ?? 0,
         reports: reportsPerMart.get(m.id) ?? 0,
@@ -627,6 +677,7 @@ export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) =
         tone: tone(destinationRuns.get(d.id) ?? []),
         sharedForUse: d.availableForUse === true,
         sharedForMaintenance: d.availableForMaintenance === true,
+        people: owners(d),
       }))
       .sort((a, b) => b.reports - a.reports || a.title.localeCompare(b.title)),
     reports: reports.sort((a, b) => (b.lastRunAt ?? '').localeCompare(a.lastRunAt ?? '')),
@@ -803,6 +854,7 @@ function storageList(raw: RawStorage[], marts: Mart[]): Storage[] {
       marts: held.get(storage.id) ?? 0,
       sharedForUse: storage.availableForUse === true,
       sharedForMaintenance: storage.availableForMaintenance === true,
+      people: owners(storage),
     }))
     .sort((a, b) => b.marts - a.marts || a.title.localeCompare(b.title))
 }

@@ -9,6 +9,7 @@ import {
   Loader2,
   Plus,
   Share2,
+  Users,
   Waypoints,
   XCircle,
 } from 'lucide-react'
@@ -25,7 +26,7 @@ import {
   qualityVisual,
   sharedFor,
 } from './format'
-import { martId, qualityTone, type Mart, type Tone } from './owox'
+import { martId, qualityTone, type Mart, type Party, type Person, type Tone } from './owox'
 import type { DragProps } from './reorder'
 
 /** What the page knows about the selection, which only the page can render without losing it. */
@@ -195,8 +196,9 @@ export function MartCard({
             <History size={14} />
           </Mark>
         )}
-        {/* What the project may do with it, beside what the project knows about it. */}
+        {/* What the project may do with it, and whose it is, beside what the project knows about it. */}
         <Shared what={sharing} />
+        <People people={mart.people} />
       </div>
     </NodeCard>
   )
@@ -296,6 +298,44 @@ export function Shared({ what }: { what?: string }) {
   return (
     <span className="dm-shared" title={what}>
       <Share2 size={12} />
+    </span>
+  )
+}
+
+/** A person's picture when OWOX has one, and their initials when it does not. */
+function Face({ who }: { who: Person }) {
+  return who.avatar && /^(https?:|data:)/.test(who.avatar) ? (
+    <img className="dm-face" src={who.avatar} alt="" width={18} height={18} />
+  ) : (
+    <span className="dm-face">{initials(who.name)}</span>
+  )
+}
+
+/**
+ * Who a thing belongs to, on hover: whoever made it, then whoever owns it, with faces and names.
+ *
+ * Nothing at all when the thing records nobody — which is a real state, and an empty bubble is a
+ * worse way to say it than no glyph.
+ */
+export function People({ people }: { people: Party[] }) {
+  if (people.length === 0) return null
+  const label = people.map(party => `${party.role}: ${party.who.map(who => who.name).join(', ')}`).join('. ')
+  return (
+    <span className="dm-status dm-mark dm-idle" tabIndex={0} role="note" aria-label={label}>
+      <Users size={14} />
+      <span className="dm-hint-body dm-people-body">
+        {people.map(party => (
+          <span className="dm-party" key={party.role}>
+            <span className="dm-party-role">{party.role}</span>
+            {party.who.map(who => (
+              <span className="dm-person" key={who.id || who.name}>
+                <Face who={who} />
+                {who.name}
+              </span>
+            ))}
+          </span>
+        ))}
+      </span>
     </span>
   )
 }

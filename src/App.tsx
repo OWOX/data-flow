@@ -15,7 +15,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AddCard, Logo, MartCard, MoreCard, NodeCard, RunIcon, Shared, type CardState } from './cards'
+import { AddCard, Logo, MartCard, MoreCard, NodeCard, People, RunIcon, Shared, type CardState } from './cards'
 import { ago, count, reportName, scheduleLabel, sharedFor } from './format'
 import { Block, MultiSelect, SearchBox } from './controls'
 import { DESTINATION, EXIT, STORAGE, type Mark } from './icons'
@@ -775,12 +775,16 @@ function StoragesBlock({
           badges={
             <>
               <span className="dm-badge">{count(storage.marts, 'data mart')}</span>
-              <Shared what={sharedFor(storage.sharedForMaintenance, storage.sharedForUse, 'use')} />
             </>
           }
           link={`/ui/${ctx.projectId}/data-storages?id=${encodeURIComponent(storage.id)}`}
           linkTitle="Open this storage"
-        />
+        >
+          <div className="dm-node-foot">
+            <Shared what={sharedFor(storage.sharedForMaintenance, storage.sharedForUse, 'use')} />
+            <People people={storage.people} />
+          </div>
+        </NodeCard>
       ))}
       {/* Ordered by what each holds, so the empty ones are last in the queue rather than a case. */}
       <MoreCard
@@ -875,12 +879,16 @@ function DestinationsBlock({ state, ctx, model, destinations, destinationCards, 
           badges={
             <>
               <span className="dm-badge">{count(destination.reports, 'report')}</span>
-              <Shared what={sharedFor(destination.sharedForMaintenance, destination.sharedForUse, 'use')} />
             </>
           }
           link={`/ui/${ctx.projectId}/data-destinations?id=${encodeURIComponent(destination.id)}`}
           linkTitle="Open this destination"
-        />
+        >
+          <div className="dm-node-foot">
+            <Shared what={sharedFor(destination.sharedForMaintenance, destination.sharedForUse, 'use')} />
+            <People people={destination.people} />
+          </div>
+        </NodeCard>
       ))}
       {exitCards.items.map(exit => (
         <NodeCard
@@ -983,6 +991,7 @@ function ReportsBlock({
               <RunIcon status={report.lastRunStatus} />
             </span>
             <span className="dm-muted dm-run">{report.lastRunAt ? ago(report.lastRunAt) : 'never run'}</span>
+            <People people={report.people} />
           </div>
         </NodeCard>
       ))}

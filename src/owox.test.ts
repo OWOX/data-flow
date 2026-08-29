@@ -6,7 +6,7 @@ import { loadModel, qualityTone, recent, tone, worst } from './owox.ts'
 import { reach } from './wires.ts'
 
 const marts = [
-  { id: 'm1', title: 'Facebook ads', status: 'PUBLISHED', definitionType: 'CONNECTOR', connectorSourceName: 'FacebookAds', storage: { title: 'BigQuery', type: 'GOOGLE_BIGQUERY' }, availableForReporting: true, dataLastUpdated: { dataLastUpdatedAt: '2026-08-01T00:00:00Z', coverage: 'complete' } },
+  { id: 'm1', title: 'Facebook ads', status: 'PUBLISHED', definitionType: 'CONNECTOR', connectorSourceName: 'FacebookAds', storage: { title: 'BigQuery', type: 'GOOGLE_BIGQUERY' }, availableForReporting: true, createdByUser: { userId: 'u1', fullName: 'Ada Lovelace', avatar: 'https://x/a.png' }, technicalOwnerUsers: [{ userId: 'u2', email: 'grace@example.com' }], businessOwnerUsers: [], dataLastUpdated: { dataLastUpdatedAt: '2026-08-01T00:00:00Z', coverage: 'complete' } },
   { id: 'm2', title: 'Facebook spend', status: 'DRAFT', definitionType: 'CONNECTOR', connectorSourceName: 'FacebookAds', storage: { title: 'BigQuery', type: 'GOOGLE_BIGQUERY' } },
   { id: 'm3', title: 'Blend', status: 'PUBLISHED', definitionType: 'SQL', storage: { title: 'Athena', type: 'AWS_ATHENA' } },
 ]
@@ -99,6 +99,14 @@ test('the whole graph: cards, order, badges and lines', async () => {
     [true, false],
   )
   assert.equal(model.marts[0].errors, true)
+  // Whoever made it first, then whoever owns it. A role nobody holds is dropped, and a person with
+  // no name falls back to their email rather than showing a bare id.
+  assert.deepEqual(model.marts[0].people, [
+    { role: 'Created by', who: [{ id: 'u1', name: 'Ada Lovelace', avatar: 'https://x/a.png' }] },
+    { role: 'Technical owners', who: [{ id: 'u2', name: 'grace@example.com', avatar: undefined }] },
+  ])
+  // A data mart that records nobody says so with an empty list, not a role holding nobody.
+  assert.deepEqual(model.marts[1].people, [])
   assert.equal(model.marts[1].outbound, 1)
   assert.equal(model.marts[2].draft, true)
   assert.deepEqual(
