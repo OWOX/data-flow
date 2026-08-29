@@ -63,14 +63,15 @@ body { margin: 0; color: var(--foreground); }
 /* A report whose destination is not visible: it still reads a mart, drawn plainly so the gap in
    the middle is not mistaken for a route. */
 #wires .direct { stroke: var(--muted-foreground); }
-#wires .direct.lit { stroke-dasharray: 2 3; }
 #wires .relationship, #wires .exit { stroke: var(--muted-foreground); }
 
 #wires path.lit { opacity: 1; }
 /* A route no report has ever run: drawn, but plainly not carrying anything. */
 #wires .dormant.lit { opacity: 0.45; }
-/* Direction, read from the card in hand: solid leaves it, dashed arrives at it. */
-#wires path.lit.inbound { stroke-dasharray: 5 4; }
+/* Direction, read from the card in hand: a line leaving it is drawn full, one arriving at it thin.
+   Weight rather than dashes, so every line on the canvas is solid and only its size and colour
+   ever differ. */
+#wires path.lit.inbound { stroke-width: 1; }
 
 /* The block chrome OWOX itself uses for Storage / Input Source / Output schema: a light panel with
    a rounded icon tile beside the title, no shadow, a hairline under it. */
@@ -81,15 +82,15 @@ body { margin: 0; color: var(--foreground); }
   border: 2px solid var(--muted-foreground); border-radius: inherit;
   pointer-events: none;
 }
-/* A band paints in document order, so an open menu or a raised tooltip in one band slides under
-   the next band's toolbar — which is what put the Reports search over the open Type menu. The band
-   holding the open thing comes forward as a whole. */
-.dm-band:has(.dm-node:hover),
-.dm-band:has(.dm-node:focus-within) { z-index: 20; }
-/* Higher than a hovered card's band: an open menu is being used, and the pointer travelling over a
-   card in a later band must not put that card's bubble through it. */
-.dm-band:has(details[open]) { z-index: 30; }
-/* An open menu outranks a hovered card's bubble: the menu is the thing being read. */
+/*
+ * Nothing raises a whole band.
+ *
+ * Raising one made a stacking context of it, and everything inside then painted together — so the
+ * moment a card was hovered, which is exactly when the lines light, that band's own background
+ * came forward over them. The pieces that have to overflow carry their own order instead, in one
+ * scale on the canvas: lines 1, cards 2, a hovered card 8, a block's title 5, a bubble 30, an open
+ * menu 40, and its header 50 above all of them.
+ */
 .dm-band-head:has(details[open]) { z-index: 50; }
 .dm-band {
   position: relative;
