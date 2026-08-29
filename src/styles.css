@@ -160,6 +160,16 @@ body { margin: 0; color: var(--foreground); }
 }
 /* Full, and green for the moment before the block opens. */
 .dm-loadbar-done span { background: #d9eed7; }
+/* Cards collapse into a point at their own centre, and grow back out of one.
+   Only `scale` and `opacity`: neither touches layout, so the grid does not reflow, the canvas
+   keeps its size, and the observer that redraws every line stays quiet until the cards are gone. */
+@keyframes dm-fold-out { to { scale: 0; opacity: 0; } }
+@keyframes dm-fold-in { from { scale: 0; opacity: 0; } }
+.dm-band-out > * { animation: dm-fold-out 250ms ease-in forwards; }
+.dm-band-in > * { animation: dm-fold-in 250ms ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .dm-band-out > *, .dm-band-in > * { animation: none; }
+}
 .dm-band-grid { display: grid; gap: 0.85rem; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); }
 .dm-empty { margin: 0; font-size: 0.8125rem; }
 

@@ -133,6 +133,9 @@ const EXIT_TYPES = [
  * An exit reads every data mart in the project, so drawing it a line per card would be fifty lines
  * saying one thing. It gets one line to the block, and the block takes a border.
  */
+/** Long enough to read as motion, short enough that nobody waits for it. */
+const FOLD_MS = 250
+
 const MARTS = 'marts-block'
 /**
  * Each block's own id, and the card ids it holds.
@@ -359,15 +362,22 @@ function Canvas({
    */
   const [storagePages, setStoragePages] = useState(0)
   const [folded, setFolded] = useState<Set<string>>(new Set())
-  const onFold = useCallback(
-    (block: string) =>
-      setFolded(open => {
-        const next = new Set(open)
-        if (!next.delete(block)) next.add(block)
-        return next
-      }),
-    [],
-  )
+  /**
+   * Blocks mid-animation, and which way they are going.
+   *
+   * Cards have to still be in the page to collapse, and gone once they have — the wire layer reads
+   * which cards are absent to decide where a line ends, and an invisible card is still a present
+   * one to `querySelector`. So folding waits out the animation before unmounting anything.
+   */
+  const [animating, setAnimating] = useState<Record<string, 'in' | 'out'>>({})
+  const onFold = useCallback((block: string) => {
+    setAnimating(now => ({ ...now, [block]: folded.has(block) ? 'in' : 'out' }))
+    if (folded.has(block)) setFolded(open => new Set([...open].filter(b => b !== block)))
+    setTimeout(() => {
+      if (!folded.has(block)) setFolded(open => new Set(open).add(block))
+      setAnimating(({ [block]: _gone, ...rest }) => rest)
+    }, FOLD_MS)
+  }, [folded])
   const [types, setTypes] = useState<string[]>(() => EXIT_TYPES.map(row => row.type))
   const [reportSearch, setReportSearch] = useState('')
   const [reportFlags, setReportFlags] = useState(() => REPORT_FLAGS.map(flag => flag.key))
@@ -535,6 +545,7 @@ function Canvas({
     id: BANDS[block].id,
     holds: BANDS[block].holds,
     folded: folded.has(block),
+    animating: animating[block],
     onFold: () => onFold(block),
     lit: bandLit(block),
     loading: reading(pending),

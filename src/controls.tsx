@@ -12,6 +12,7 @@ export function Block({
   action,
   loading,
   folded,
+  animating,
   onFold,
   id,
   holds,
@@ -29,6 +30,8 @@ export function Block({
   loading?: number | null
   /** Folded by the reader rather than by the load: header only, and its controls go with the cards. */
   folded?: boolean
+  /** Set while its cards are collapsing away or growing back. */
+  animating?: 'in' | 'out'
   onFold?: () => void
   /** Set when the block itself is one end of a wire, as the Data Marts block is for the exits. */
   id?: string
@@ -82,7 +85,7 @@ export function Block({
         )}
       </header>
       {folded ? null : loading === null || loading === undefined ? (
-        <div className="dm-band-grid">{children}</div>
+        <div className={`dm-band-grid${animating ? ` dm-band-${animating}` : ''}`}>{children}</div>
       ) : (
         <div
           className={`dm-loadbar${loading >= 1 ? ' dm-loadbar-done' : ''}`}

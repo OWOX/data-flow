@@ -190,10 +190,29 @@ export function useWires(
     const observer = new ResizeObserver(layout)
     observer.observe(canvas)
 
+    /**
+     * A card growing back out of a point never changes the layout, so nothing above would fire.
+     *
+     * `getBoundingClientRect` reports the transformed box, so a line drawn mid-animation ends at
+     * the point the card is scaled to — right while it moves, wrong once it stops. One pass after
+     * the last card settles, folded into a frame so twenty-five endings cost one.
+     */
+    let queued = false
+    const settle = () => {
+      if (queued) return
+      queued = true
+      requestAnimationFrame(() => {
+        queued = false
+        layout()
+      })
+    }
+    canvas.addEventListener('animationend', settle)
+
     // A whole block can be one end of a wire, so it lights like a card — but it is not one, and
     // the click handler still only ever selects `[data-node]`.
     return () => {
       observer.disconnect()
+      canvas.removeEventListener('animationend', settle)
       for (const path of paths) path.remove()
     }
   }, [canvasRef, wires, revision])
