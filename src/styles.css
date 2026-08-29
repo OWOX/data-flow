@@ -362,9 +362,10 @@ body { margin: 0; color: var(--foreground); }
 .dm-badge-draft { background: color-mix(in oklab, var(--primary) 15%, transparent); color: var(--primary); }
 
 /* Status glyphs sit on their own line so a long title above cannot push them out of alignment. */
-/* In a badge row it sits with the others; in a card's foot it is pushed clear of the status
-   glyphs, which say what is true of the mart where this says what may be done with it. */
-.dm-shared { gap: 0.25rem; }
+/* Pushed clear of the status glyphs, which say what is true of the thing where this says what may
+   be done with it. An icon and no words: three sharing states across three kinds of card cost more
+   room in a row of badges than they were ever worth, and the hint says which one it is. */
+.dm-shared { display: inline-flex; color: var(--muted-foreground); }
 .dm-node-foot .dm-shared { margin-left: auto; }
 .dm-node-foot { display: flex; align-items: center; gap: 0.375rem; margin-top: auto; padding-top: 0.125rem; }
 .dm-status { display: inline-flex; }

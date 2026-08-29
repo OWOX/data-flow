@@ -775,7 +775,7 @@ function StoragesBlock({
           badges={
             <>
               <span className="dm-badge">{count(storage.marts, 'data mart')}</span>
-              <Shared what={sharedFor(storage.sharedForMaintenance, storage.sharedForUse, 'Use')} />
+              <Shared what={sharedFor(storage.sharedForMaintenance, storage.sharedForUse, 'use')} />
             </>
           }
           link={`/ui/${ctx.projectId}/data-storages?id=${encodeURIComponent(storage.id)}`}
@@ -875,7 +875,7 @@ function DestinationsBlock({ state, ctx, model, destinations, destinationCards, 
           badges={
             <>
               <span className="dm-badge">{count(destination.reports, 'report')}</span>
-              <Shared what={sharedFor(destination.sharedForMaintenance, destination.sharedForUse, 'Use')} />
+              <Shared what={sharedFor(destination.sharedForMaintenance, destination.sharedForUse, 'use')} />
             </>
           }
           link={`/ui/${ctx.projectId}/data-destinations?id=${encodeURIComponent(destination.id)}`}

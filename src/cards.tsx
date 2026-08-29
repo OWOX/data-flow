@@ -144,7 +144,7 @@ export function MartCard({
   // second opinion, and run health stays on the cards that have nothing else to say.
   const tone = qualityTone(quality.tone)
   const freshness = freshnessLines(mart)
-  const sharing = sharedFor(mart.sharedForMaintenance, mart.sharedForReporting, 'Reporting')
+  const sharing = sharedFor(mart.sharedForMaintenance, mart.sharedForReporting, 'reporting')
 
   return (
     <NodeCard
@@ -287,12 +287,15 @@ export function AppLink({
   )
 }
 
-/** What a thing is shared for, or nothing at all when it is shared for neither. */
+/**
+ * That a thing is shared, and on the hint what for. Nothing at all when it is shared for neither:
+ * the absence of the icon already says that, and a row of "not shared" says nothing worth the room.
+ */
 export function Shared({ what }: { what?: string }) {
   if (!what) return null
   return (
-    <span className="dm-badge dm-shared" title={`Shared for ${what}`}>
-      <Share2 size={12} /> {what}
+    <span className="dm-shared" title={what}>
+      <Share2 size={12} />
     </span>
   )
 }

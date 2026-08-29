@@ -147,7 +147,13 @@ export const qualityLine = (label: string) => QUALITY[label] ?? label
  * nothing rather than "not shared" — the absence of a badge is already that.
  */
 export const sharedFor = (maintenance: boolean, granted: boolean, name: string) =>
-  maintenance && granted ? `Maintenance & ${name}` : maintenance ? 'Maintenance' : granted ? name : undefined
+  maintenance && granted
+    ? `Shared for ${name} & maintenance`
+    : maintenance
+      ? 'Shared for maintenance'
+      : granted
+        ? `Shared for ${name}`
+        : undefined
 
 /** How many of the mart's checks came back clean, when it has run enough to know. */
 export function qualityChecks(summary?: QualitySummary) {
