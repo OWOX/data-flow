@@ -1,5 +1,5 @@
 // Cards a reader can drag into their own order.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 export type DragProps = {
   draggable: true
@@ -45,6 +45,31 @@ export function useReorder<T>(items: T[], idOf: (item: T) => string): Cards<T> {
    * replacement, so the cards stayed collapsed and kept their cells forever.
    */
   const ending = useRef<ReturnType<typeof setTimeout>>(undefined)
+  /**
+   * Cards that have just joined the list.
+   *
+   * Not "cards that have just mounted": folding a block unmounts every card and unfolding mounts
+   * them all again, and none of them joined anything — the list never changed. Arrival is measured
+   * against the ids that were here before, so opening a block is silent and admitting one card
+   * through a filter animates one card.
+   *
+   * Measured in a layout effect so the class is on the element before the browser paints; an
+   * ordinary effect lands a frame late, and the card flashes at full size before it collapses to
+   * begin.
+   */
+  const [entering, setEntering] = useState<Set<string>>(new Set())
+  const known = useRef(new Set(items.map(idOf)))
+  const beginning = useRef<ReturnType<typeof setTimeout>>(undefined)
+
+  useLayoutEffect(() => {
+    const here = items.map(idOf)
+    const fresh = here.filter(id => !known.current.has(id))
+    known.current = new Set(here)
+    if (fresh.length === 0) return
+    setEntering(new Set(fresh))
+    clearTimeout(beginning.current)
+    beginning.current = setTimeout(() => setEntering(new Set()), LEAVING_MS)
+  }, [items, idOf])
 
   useEffect(() => {
     const here = new Set(items.map(idOf))
@@ -56,7 +81,13 @@ export function useReorder<T>(items: T[], idOf: (item: T) => string): Cards<T> {
     ending.current = setTimeout(() => setLeaving([]), LEAVING_MS)
   }, [items, idOf])
 
-  useEffect(() => () => clearTimeout(ending.current), [])
+  useEffect(
+    () => () => {
+      clearTimeout(ending.current)
+      clearTimeout(beginning.current)
+    },
+    [],
+  )
   const [drop, setDrop] = useState<{ id: string; after: boolean } | null>(null)
   const dragged = useRef<string | null>(null)
 
@@ -96,6 +127,7 @@ export function useReorder<T>(items: T[], idOf: (item: T) => string): Cards<T> {
   const dragProps = (item: T): DragProps => {
     const id = idOf(item)
     const going = leaving.some(other => idOf(other.item) === id) ? 'dm-leaving' : ''
+    const arriving = entering.has(id) ? 'dm-entering' : ''
     const marker =
       dragged.current === id
         ? 'dm-dragging'
@@ -106,7 +138,7 @@ export function useReorder<T>(items: T[], idOf: (item: T) => string): Cards<T> {
           : undefined
     return {
       draggable: true,
-      className: [marker, going].filter(Boolean).join(' ') || undefined,
+      className: [marker, going, arriving].filter(Boolean).join(' ') || undefined,
       onDragStart: e => {
         dragged.current = id
         e.dataTransfer.effectAllowed = 'move'
