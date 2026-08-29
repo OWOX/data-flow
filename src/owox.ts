@@ -202,11 +202,30 @@ export const STORAGES_BLOCK = 'storages-block'
 export const MARTS_BLOCK = 'marts-block'
 export const DESTINATIONS_BLOCK = 'destinations-block'
 
-export const sourceId = (key: string) => `src-${key.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`
-export const storeId = (id: string) => `st-${id}`
-export const martId = (id: string) => `dm-${id}`
-export const destId = (id: string) => `dd-${id}`
-export const reportId = (id: string) => `rp-${id}`
+/**
+ * What each kind of card's id begins with, and the only place that is written down.
+ *
+ * The page used to read an id back by testing a prefix and cutting three characters off, ten times
+ * over. Three is right for four of these and wrong for the other two, so the idiom read as general
+ * and was not — a source id cut that way loses a character and matches nothing, silently.
+ */
+const PREFIX = { source: 'src-', storage: 'st-', mart: 'dm-', destination: 'dd-', report: 'rp-' } as const
+type Kind = keyof typeof PREFIX
+
+export const sourceId = (key: string) =>
+  `${PREFIX.source}${key.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`
+export const storeId = (id: string) => `${PREFIX.storage}${id}`
+export const martId = (id: string) => `${PREFIX.mart}${id}`
+export const destId = (id: string) => `${PREFIX.destination}${id}`
+export const reportId = (id: string) => `${PREFIX.report}${id}`
+
+/** The thing's own id back out of a card id, or null when that card is not of this kind. */
+export const idOf = (kind: Kind, cardId: string | null | undefined) =>
+  cardId?.startsWith(PREFIX[kind]) ? cardId.slice(PREFIX[kind].length) : null
+
+/** Whether a card id names this kind of thing. */
+export const isKind = (kind: Kind, cardId: string | null | undefined) =>
+  cardId?.startsWith(PREFIX[kind]) === true
 
 /** An endpoint outside the typed client, or one this member may not read, must not cost the page. */
 async function optional<T>(load: () => Promise<T>, fallback: T): Promise<T> {

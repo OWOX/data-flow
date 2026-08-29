@@ -268,6 +268,14 @@ export function useWires(
     }
   }, [canvasRef, wires, revision])
 
+  /**
+   * Lighting and input, over the lines the effect above drew.
+   *
+   * `revision` is in the dependencies and read nowhere in the body, which reads like something to
+   * delete. It is not: `drawn.current` is captured here, and the effect above replaces that array
+   * whenever `revision` changes. Without it this effect would go on lighting paths that had been
+   * removed from the page.
+   */
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return

@@ -25,6 +25,8 @@ import {
   recheck,
   reportId,
   settling,
+  idOf,
+  isKind,
   sourceId,
   storeId,
   DESTINATIONS_BLOCK,
@@ -171,6 +173,40 @@ const REPORT_FLAGS: Array<Flag<Report>> = [
   { key: 'no-triggers', facet: 'triggers', label: 'Without triggers', test: report => !report.schedule?.total },
 ]
 
+/**
+ * A block's own sifting: what has been typed, what is ticked, and how far down the list it has
+ * been read. The Data Marts and Reports blocks each had the three as separate state, with the same
+ * rule wired to each control by hand — narrowing starts the list again from the top, so the card
+ * just clicked cannot fall past the cap and vanish under the pointer.
+ */
+function useSifted<T>(flags: Array<Flag<T>>, sift: (chosen: string[]) => (item: T) => boolean) {
+  const [search, setSearch] = useState('')
+  const [chosen, setChosen] = useState(() => flags.map(flag => flag.key))
+  const [limit, setLimit] = useState(PAGE)
+  const matches = useMemo(() => sift(chosen), [sift, chosen])
+  const restart = useCallback(() => setLimit(PAGE), [])
+  return {
+    search,
+    chosen,
+    limit,
+    matches,
+    needle: search.trim().toLowerCase(),
+    onSearch: (next: string) => {
+      setSearch(next)
+      setLimit(PAGE)
+    },
+    onChoose: (next: string[]) => {
+      setChosen(next)
+      setLimit(PAGE)
+    },
+    more: () => setLimit(at => at + PAGE),
+    // Called from `onPin`, which keeps one identity for the life of the page — the lines re-bind
+    // every time it changes — so this one has to be stable too.
+    restart,
+  }
+}
+type Sifted<T> = ReturnType<typeof useSifted<T>>
+
 const martPasses = facetFilter(FLAGS)
 const storagePasses = facetFilter(STORAGE_FLAGS)
 const reportPasses = facetFilter(REPORT_FLAGS)
@@ -195,12 +231,7 @@ type Page = {
   storageScopeTitle?: string
   marts: Mart[]
   martCards: Cards<Mart>
-  martSearch: string
-  setMartSearch: (value: string) => void
-  flags: string[]
-  setFlags: (value: string[]) => void
-  limit: number
-  setLimit: (value: number) => void
+  martFilter: Sifted<Mart>
   destinations: Destination[]
   destinationCards: Cards<Destination>
   exitCards: Cards<(typeof EXITS)[number]>
@@ -209,12 +240,7 @@ type Page = {
   reports: Report[]
   reportCards: Cards<Report>
   selectedTitle?: string
-  reportSearch: string
-  setReportSearch: (value: string) => void
-  reportFlags: string[]
-  setReportFlags: (value: string[]) => void
-  reportLimit: number
-  setReportLimit: (value: number) => void
+  reportFilter: Sifted<Report>
   state: CardState
   pending: Progress | null
   /** Runs both host checks over every mart, then re-reads until quality stops moving. */
@@ -346,11 +372,9 @@ function Canvas({
 }) {
   const canvas = useRef<HTMLDivElement>(null)
   const [pinned, setPinned] = useState<string | null>(null)
-  const [limit, setLimit] = useState(PAGE)
   // Filters start with everything ticked rather than empty: an empty menu now means "none", which
   // is what unticking "Select all" asks for.
-  const [flags, setFlags] = useState(() => FLAGS.map(flag => flag.key))
-  const [martSearch, setMartSearch] = useState('')
+  const martFilter = useSifted(FLAGS, martPasses)
   const [storageTypes, setStorageTypes] = useState<string[]>([])
   const [storageFlags, setStorageFlags] = useState(() => STORAGE_FLAGS.map(flag => flag.key))
   /**
@@ -372,9 +396,7 @@ function Canvas({
     [],
   )
   const [types, setTypes] = useState<string[]>(() => EXIT_TYPES.map(row => row.type))
-  const [reportSearch, setReportSearch] = useState('')
-  const [reportFlags, setReportFlags] = useState(() => REPORT_FLAGS.map(flag => flag.key))
-  const [reportLimit, setReportLimit] = useState(PAGE)
+  const reportFilter = useSifted(REPORT_FLAGS, reportPasses)
   /**
    * What the Reports block is narrowed to, which is not the same as what is selected.
    *
@@ -397,29 +419,32 @@ function Canvas({
     setStorageTypes([...new Set(model.storages.map(storage => storage.type))])
     setTypes([...model.destinationTypes.map(type => type.type), ...EXIT_TYPES.map(row => row.type)])
   }, [model])
+  const { restart: restartMarts } = martFilter
+  const { restart: restartReports } = reportFilter
   const onPin = useCallback((id: string | null) => {
     setPinned(id)
-    if (id === null || id.startsWith('dm-') || id.startsWith('dd-')) {
+    if (id === null || isKind('mart', id) || isKind('destination', id)) {
       setScope(id)
-      setReportLimit(PAGE)
+      restartReports()
     }
     // A storage narrows the Data Marts block to what it holds; anything else clears that.
-    if (id === null || id.startsWith('st-') || id.startsWith('dm-')) {
-      setStorageScope(id?.startsWith('st-') ? id.slice(3) : null)
-      setLimit(PAGE)
+    if (id === null || isKind('storage', id) || isKind('mart', id)) {
+      setStorageScope(idOf('storage', id))
+      restartMarts()
     }
-  }, [])
+  }, [restartMarts, restartReports])
 
-  const marts = useMemo(() => {
-    const passes = martPasses(flags)
-    const needle = martSearch.trim().toLowerCase()
-    return model.marts.filter(
-      mart =>
-        (!storageScope || mart.storageId === storageScope) &&
-        (needle === '' || mart.title.toLowerCase().includes(needle)) &&
-        passes(mart),
-    )
-  }, [model.marts, storageScope, flags, martSearch])
+  const { matches: martMatches, needle: martNeedle } = martFilter
+  const marts = useMemo(
+    () =>
+      model.marts.filter(
+        mart =>
+          (!storageScope || mart.storageId === storageScope) &&
+          (martNeedle === '' || mart.title.toLowerCase().includes(martNeedle)) &&
+          martMatches(mart),
+      ),
+    [model.marts, storageScope, martMatches, martNeedle],
+  )
 
   const storagesMatching = useMemo(() => {
     const passes = storagePasses(storageFlags)
@@ -432,23 +457,24 @@ function Canvas({
   const destinations = model.destinations.filter(destination => types.includes(destination.type))
 
   // Selecting a data mart or a destination turns the Reports block into that card's reports.
-  const selectedMart = scope?.startsWith('dm-') ? scope.slice(3) : null
-  const selectedDestination = scope?.startsWith('dd-') ? scope.slice(3) : null
+  const selectedMart = idOf('mart', scope)
+  const selectedDestination = idOf('destination', scope)
   const selectedTitle = selectedMart
     ? model.marts.find(mart => mart.id === selectedMart)?.title
     : model.destinations.find(destination => destination.id === selectedDestination)?.title
 
-  const reports = useMemo(() => {
-    const needle = reportSearch.trim().toLowerCase()
-    const passes = reportPasses(reportFlags)
-    return model.reports.filter(
-      report =>
-        (!selectedMart || report.martId === selectedMart) &&
-        (!selectedDestination || report.destinationId === selectedDestination) &&
-        (needle === '' || reportName(report).toLowerCase().includes(needle)) &&
-        passes(report),
-    )
-  }, [model.reports, selectedMart, selectedDestination, reportSearch, reportFlags])
+  const { matches: reportMatches, needle: reportNeedle } = reportFilter
+  const reports = useMemo(
+    () =>
+      model.reports.filter(
+        report =>
+          (!selectedMart || report.martId === selectedMart) &&
+          (!selectedDestination || report.destinationId === selectedDestination) &&
+          (reportNeedle === '' || reportName(report).toLowerCase().includes(reportNeedle)) &&
+          reportMatches(report),
+      ),
+    [model.reports, selectedMart, selectedDestination, reportMatches, reportNeedle],
+  )
 
   // `<details name>` closes the other menu when one opens; nothing but this closes the last one
   // when the pointer goes elsewhere.
@@ -470,20 +496,23 @@ function Canvas({
    * at nothing is worse than an extra card.
    */
   const shown = useMemo(() => {
+    const { limit } = martFilter
     const page = marts.slice(0, limit)
     if (!pinned) return page
     const wanted = new Set(
       model.chains
         .filter(chain => chain.includes(pinned))
         .flat()
-        .filter(id => id.startsWith('dm-'))
-        .map(id => id.slice(3)),
+        .map(id => idOf('mart', id))
+        .filter((id): id is string => id !== null),
     )
     // The marts the selection joins to directly, so those lines have somewhere to land.
     for (const wire of model.wires) {
       if (wire.kind !== 'relationship') continue
-      if (wire.from === pinned) wanted.add(wire.to.slice(3))
-      if (wire.to === pinned) wanted.add(wire.from.slice(3))
+      // A relationship joins two data marts, so both ends name one.
+      const other = wire.from === pinned ? wire.to : wire.to === pinned ? wire.from : null
+      const mart = idOf('mart', other)
+      if (mart) wanted.add(mart)
     }
     /**
      * What the selection points at comes first, and the page fills what is left.
@@ -501,14 +530,14 @@ function Canvas({
     // mart where it was rather than sending it to the front of its block.
     const rank = new Map(model.marts.map((mart, at) => [mart.id, at]))
     return filled.sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0))
-  }, [marts, limit, pinned, model.chains, model.wires, model.marts])
+  }, [marts, martFilter, pinned, model.chains, model.wires, model.marts])
   // The selected report is on screen whatever the paging says, for the same reason its data mart is.
   const shownReports = useMemo(() => {
-    const page = reports.slice(0, reportLimit)
-    const id = pinned?.startsWith('rp-') ? pinned.slice(3) : null
+    const page = reports.slice(0, reportFilter.limit)
+    const id = idOf('report', pinned)
     if (!id || page.some(report => report.id === id)) return page
     return [...page, ...model.reports.filter(report => report.id === id)]
-  }, [reports, reportLimit, pinned, model.reports])
+  }, [reports, reportFilter, pinned, model.reports])
   // Cards can be dragged into another order inside their block; the lines follow them.
   const sourceCards = useReorder(model.sources, source => source.key)
   const storageCards = useReorder(storageList, storage => storage.id)
@@ -581,12 +610,7 @@ function Canvas({
     band,
     marts,
     martCards,
-    martSearch,
-    setMartSearch,
-    flags,
-    setFlags,
-    limit,
-    setLimit,
+    martFilter,
     destinations,
     destinationCards,
     exitCards,
@@ -595,12 +619,7 @@ function Canvas({
     reports,
     reportCards,
     selectedTitle,
-    reportSearch,
-    setReportSearch,
-    reportFlags,
-    setReportFlags,
-    reportLimit,
-    setReportLimit,
+    reportFilter,
     state,
     pending,
     onRecheck,
@@ -776,7 +795,7 @@ function StoragesBlock({
   )
 }
 
-function DataMartsBlock({ state, ctx, marts, martCards, martSearch, setMartSearch, flags, setFlags, limit, setLimit, onRecheck, checking, pending, band, storageScopeTitle }: Page) {
+function DataMartsBlock({ state, ctx, marts, martCards, martFilter, onRecheck, checking, pending, band, storageScopeTitle }: Page) {
   return (
     <Block
       {...band('marts')}
@@ -787,15 +806,12 @@ function DataMartsBlock({ state, ctx, marts, martCards, martSearch, setMartSearc
       hint={`Ordered by how much depends on them, ${PAGE} at a time. A dashed line is a relationship — a join between two marts; selecting one brings the marts it joins onto the page.`}
       toolbar={
         <>
-          <SearchBox value={martSearch} onChange={setMartSearch} label="Search data marts" />
+          <SearchBox value={martFilter.search} onChange={martFilter.onSearch} label="Search data marts" />
           <MultiSelect
             label="Filter"
             options={FLAGS.map(flag => ({ value: flag.key, label: flag.label, group: flag.facet }))}
-            selected={flags}
-            onChange={next => {
-              setFlags(next)
-              setLimit(PAGE)
-            }}
+            selected={martFilter.chosen}
+            onChange={martFilter.onChoose}
           />
         </>
       }
@@ -804,11 +820,11 @@ function DataMartsBlock({ state, ctx, marts, martCards, martSearch, setMartSearc
         <MartCard key={mart.id} ctx={ctx} mart={mart} drag={martCards.dragProps(mart)} state={state} />
       ))}
       <MoreCard
-        shown={Math.min(limit, marts.length)}
+        shown={Math.min(martFilter.limit, marts.length)}
         total={marts.length}
         page={PAGE}
         holds="dm-"
-        onMore={() => setLimit(limit + PAGE)}
+        onMore={martFilter.more}
       />
       <AddCard ctx={ctx} to={`/ui/${ctx.projectId}/data-marts/create`} label="New data mart" />
     </Block>
@@ -891,12 +907,7 @@ function ReportsBlock({
   reports,
   reportCards,
   selectedTitle,
-  reportSearch,
-  setReportSearch,
-  reportFlags,
-  setReportFlags,
-  reportLimit,
-  setReportLimit,
+  reportFilter,
   pending,
   band,
 }: Page) {
@@ -909,22 +920,12 @@ function ReportsBlock({
       hint={`The ${PAGE} most recently run reports. Select a data mart or a destination above and this block narrows to its reports.`}
       toolbar={
         <>
-          <SearchBox
-            value={reportSearch}
-            onChange={next => {
-              setReportSearch(next)
-              setReportLimit(PAGE)
-            }}
-            label="Search reports"
-          />
+          <SearchBox value={reportFilter.search} onChange={reportFilter.onSearch} label="Search reports" />
           <MultiSelect
             label="Filter"
             options={REPORT_FLAGS.map(flag => ({ value: flag.key, label: flag.label }))}
-            selected={reportFlags}
-            onChange={next => {
-              setReportFlags(next)
-              setReportLimit(PAGE)
-            }}
+            selected={reportFilter.chosen}
+            onChange={reportFilter.onChoose}
           />
         </>
       }
@@ -986,11 +987,11 @@ function ReportsBlock({
         </NodeCard>
       ))}
       <MoreCard
-        shown={Math.min(reportLimit, reports.length)}
+        shown={Math.min(reportFilter.limit, reports.length)}
         total={reports.length}
         page={PAGE}
         holds="rp-"
-        onMore={() => setReportLimit(reportLimit + PAGE)}
+        onMore={reportFilter.more}
       />
       {reports.length === 0 && (
         <p className="dm-muted dm-empty">
