@@ -295,10 +295,12 @@ export function AppLink({
  */
 export function Shared({ what }: { what?: string }) {
   if (!what) return null
+  // The page's own hint, not the browser's: a native `title` waits a second, styles itself, and
+  // was the one thing on the canvas that did not look like the rest.
   return (
-    <span className="dm-shared" title={what}>
-      <Share2 size={12} />
-    </span>
+    <Mark tone="idle" lines={[what]} className="dm-shared">
+      <Share2 size={14} />
+    </Mark>
   )
 }
 
@@ -321,7 +323,7 @@ export function People({ people }: { people: Party[] }) {
   if (people.length === 0) return null
   const label = people.map(party => `${party.role}: ${party.who.map(who => who.name).join(', ')}`).join('. ')
   return (
-    <span className="dm-status dm-mark dm-idle" tabIndex={0} role="note" aria-label={label}>
+    <span className="dm-status dm-mark dm-idle dm-people" tabIndex={0} role="note" aria-label={label}>
       <Users size={14} />
       <span className="dm-hint-body dm-people-body">
         {people.map(party => (
@@ -356,16 +358,18 @@ function Mark({
   lines,
   ctx,
   to,
+  className: extra,
   children,
 }: {
   tone: Tone
   lines: string[]
+  className?: string
   /** Given both, the mark leads somewhere: the host opens it, and clicking no longer picks the card. */
   ctx?: PluginContext
   to?: string
   children: React.ReactNode
 }) {
-  const className = `dm-status dm-mark dm-${tone}`
+  const className = `dm-status dm-mark dm-${tone}${extra ? ` ${extra}` : ''}`
   const label = lines.join('. ')
   const body = (
     <>
