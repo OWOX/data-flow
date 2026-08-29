@@ -209,14 +209,19 @@ export function useWires(
         return el ? { el, box: boxOf(el) } : null
       }
       /**
-       * One line per pair of things actually on the page.
+       * One curve per pair of things on the page, given to every wire that runs between them.
        *
        * Thousands of wires can end at the same stand-in — every data mart a storage holds, every
-       * one past the page — and drawn separately they are thousands of identical curves between
-       * the same two boxes. The first claims the pair; the rest say the same thing and are left
-       * undrawn, which costs nothing and looks no different.
+       * report past the page — and they are all the same curve between the same two boxes, so it
+       * is worked out once and shared.
+       *
+       * Shared, not skipped. Letting the first wire claim the pair and dropping the rest looked
+       * identical while nothing was selected and was wrong the moment something was: a wire is lit
+       * by its own ends, so hovering a data mart lit its own wire to the "load more" card while the
+       * one actually carrying the curve belonged to some other report and stayed dark. No line at
+       * all, for a link that exists.
        */
-      const drawnPairs = new Set<string>()
+      const curves = new Map<string, string>()
       const seat = new Map<Element, number>()
       const numbered = (el: Element) => seat.get(el) ?? (seat.set(el, seat.size), seat.size - 1)
       for (const path of paths) {
@@ -224,10 +229,11 @@ export function useWires(
         const b = at(path.dataset.to)
         // A card the filter has hidden ends its lines rather than leaving them drawn to a ghost,
         // and a line whose ends have folded into the same block would be a loop on one box.
-        const pairKey = a && b ? `${numbered(a.el)}>${numbered(b.el)}` : null
-        if (a && b && a.el !== b.el && pairKey !== null && !drawnPairs.has(pairKey)) {
-          drawnPairs.add(pairKey)
-          path.setAttribute('d', curve(a.box, b.box))
+        if (a && b && a.el !== b.el) {
+          const key = `${numbered(a.el)}>${numbered(b.el)}`
+          const drawn = curves.get(key) ?? curve(a.box, b.box)
+          curves.set(key, drawn)
+          path.setAttribute('d', drawn)
         } else path.removeAttribute('d')
       }
     }
