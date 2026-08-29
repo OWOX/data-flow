@@ -36,6 +36,15 @@ export function useReorder<T>(items: T[], idOf: (item: T) => string): Cards<T> {
    */
   const [leaving, setLeaving] = useState<Array<{ item: T; at: number }>>([])
   const shown = useRef<T[]>(items)
+  /**
+   * The timer that ends the collapse, held across renders rather than by the effect.
+   *
+   * Every caller passes `idOf` inline, so it is a new function each render and the effect re-runs
+   * every time — including the render `setLeaving` itself causes. An effect-scoped timer was
+   * cleaned up by that very re-run, and the re-run found nothing left to leave and scheduled no
+   * replacement, so the cards stayed collapsed and kept their cells forever.
+   */
+  const ending = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   useEffect(() => {
     const here = new Set(items.map(idOf))
@@ -43,9 +52,11 @@ export function useReorder<T>(items: T[], idOf: (item: T) => string): Cards<T> {
     shown.current = items
     if (gone.length === 0) return
     setLeaving(gone)
-    const timer = setTimeout(() => setLeaving([]), LEAVING_MS)
-    return () => clearTimeout(timer)
+    clearTimeout(ending.current)
+    ending.current = setTimeout(() => setLeaving([]), LEAVING_MS)
   }, [items, idOf])
+
+  useEffect(() => () => clearTimeout(ending.current), [])
   const [drop, setDrop] = useState<{ id: string; after: boolean } | null>(null)
   const dragged = useRef<string | null>(null)
 
