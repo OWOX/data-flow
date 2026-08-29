@@ -164,21 +164,36 @@ export function useWires(
       ].flatMap(band => (band.dataset.holds ?? '').split(',').map(prefix => [prefix, band] as const))
       const standIn = (id: string) => bands.find(([prefix]) => id.startsWith(prefix))?.[1] ?? null
 
-      const at = (id?: string): { el: Element; box: Box } | null => {
-        const el = id ? (canvas.querySelector(`#${CSS.escape(id)}`) ?? standIn(id)) : null
-        if (!el) return null
+      /**
+       * Every card on the page, asked for once.
+       *
+       * A wire per data mart means thousands of endpoints, and a `querySelector` each was thousands
+       * of walks over the same document to find a hundred or so elements. One sweep, then lookups.
+       */
+      const cards = new Map<string, Element>()
+      for (const card of canvas.querySelectorAll<HTMLElement>('[data-node]')) cards.set(card.id, card)
+
+      /** And measured once. Thousands of wires end at the same stand-in; its box does not move. */
+      const boxes = new Map<Element, Box>()
+      const boxOf = (el: Element) => {
+        const known = boxes.get(el)
+        if (known) return known
         const r = el.getBoundingClientRect()
-        return {
-          el,
-          box: {
-            left: r.left - origin.left,
-            right: r.right - origin.left,
-            top: r.top - origin.top,
-            bottom: r.bottom - origin.top,
-            width: r.width,
-            height: r.height,
-          },
+        const box = {
+          left: r.left - origin.left,
+          right: r.right - origin.left,
+          top: r.top - origin.top,
+          bottom: r.bottom - origin.top,
+          width: r.width,
+          height: r.height,
         }
+        boxes.set(el, box)
+        return box
+      }
+
+      const at = (id?: string): { el: Element; box: Box } | null => {
+        const el = id ? (cards.get(id) ?? standIn(id)) : null
+        return el ? { el, box: boxOf(el) } : null
       }
       /**
        * One line per pair of things actually on the page.
