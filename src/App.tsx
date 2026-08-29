@@ -179,7 +179,8 @@ type Page = {
   sourceCards: Cards<Source>
   storages: Storage[]
   storagesMatching: number
-  showEmptyStorages: () => void
+  moreStorages: () => void
+  resetStorages: () => void
   storageCards: Cards<Storage>
   storageTypes: string[]
   setStorageTypes: (value: string[]) => void
@@ -349,8 +350,14 @@ function Canvas({
   const [martSearch, setMartSearch] = useState('')
   const [storageTypes, setStorageTypes] = useState<string[]>([])
   const [storageFlags, setStorageFlags] = useState(() => STORAGE_FLAGS.map(flag => flag.key))
-  /** A storage nothing is built on is real but not yet part of any flow, so it waits behind a card. */
-  const [showEmptyStorages, setShowEmptyStorages] = useState(false)
+  /**
+   * How many extra pages of storages have been asked for.
+   *
+   * The list is ordered by how much each storage holds, so the empty ones fall to the end on their
+   * own — the first page stops at whichever comes first, twenty-five or the last storage holding
+   * something. One card reveals the rest, in pages, whichever kind they are.
+   */
+  const [storagePages, setStoragePages] = useState(0)
   const [folded, setFolded] = useState<Set<string>>(new Set())
   const onFold = useCallback(
     (block: string) =>
@@ -415,7 +422,9 @@ function Canvas({
     const passes = storagePasses(storageFlags)
     return model.storages.filter(storage => storageTypes.includes(storage.type) && passes(storage))
   }, [model.storages, storageTypes, storageFlags])
-  const storageList = showEmptyStorages ? storagesMatching : storagesMatching.filter(s => s.marts > 0)
+  const storageLimit =
+    Math.min(PAGE, storagesMatching.filter(storage => storage.marts > 0).length) + storagePages * PAGE
+  const storageList = storagesMatching.slice(0, storageLimit)
 
   const destinations = model.destinations.filter(destination => types.includes(destination.type))
 
@@ -542,7 +551,8 @@ function Canvas({
     sourceCards,
     storages: storageList,
     storagesMatching: storagesMatching.length,
-    showEmptyStorages: () => setShowEmptyStorages(true),
+    moreStorages: () => setStoragePages(pages => pages + 1),
+    resetStorages: () => setStoragePages(0),
     storageCards,
     storageScopeTitle: model.storages.find(storage => storage.id === storageScope)?.title,
     storageTypes,
@@ -670,7 +680,8 @@ function StoragesBlock({
   pending,
   storages,
   storagesMatching,
-  showEmptyStorages,
+  moreStorages,
+  resetStorages,
   storageCards,
   storageTypes,
   setStorageTypes,
@@ -697,13 +708,19 @@ function StoragesBlock({
               icon: STORAGE[type]?.icon ?? Database,
             }))}
             selected={storageTypes}
-            onChange={setStorageTypes}
+            onChange={next => {
+              setStorageTypes(next)
+              resetStorages()
+            }}
           />
           <MultiSelect
             label="Sharing"
             options={STORAGE_FLAGS.map(flag => ({ value: flag.key, label: flag.label, group: flag.facet }))}
             selected={storageFlags}
-            onChange={setStorageFlags}
+            onChange={next => {
+              setStorageFlags(next)
+              resetStorages()
+            }}
           />
         </>
       }
@@ -723,13 +740,8 @@ function StoragesBlock({
           linkTitle="Open this storage"
         />
       ))}
-      {/* A storage holding nothing is not part of any flow yet, so it waits to be asked for. */}
-      <MoreCard
-        shown={storages.length}
-        total={storagesMatching}
-        page={storagesMatching - storages.length}
-        onMore={showEmptyStorages}
-      />
+      {/* Ordered by what each holds, so the empty ones are last in the queue rather than a case. */}
+      <MoreCard shown={storages.length} total={storagesMatching} page={PAGE} onMore={moreStorages} />
       <AddCard ctx={ctx} to={`/ui/${ctx.projectId}/data-storages`} label="New storage" />
     </Block>
   )
