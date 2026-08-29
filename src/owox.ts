@@ -415,23 +415,22 @@ export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) =
   ])
 
   /**
-   * Storages worth asking about.
+   * Storages worth asking about first.
    *
-   * This route costs two round trips per storage whatever it holds, and the storage list already
-   * says how many data marts each has — so an empty one is two requests that return two empty
-   * lists. A mart in a storage skipped here still finds it by title and type.
+   * The route costs two round trips per storage whatever it holds, and the storage list says how
+   * many data marts each has — so one that says none is two requests returning two empty lists.
+   * Only a count that is actually there can rule a storage out: a host that sends none gets asked,
+   * because unknown is not empty.
+   *
+   * The count is taken as a hint, not as truth. It is checked below against the marts it was meant
+   * to account for.
    */
-  const walkable = (storages as RawStorage[])
-    .filter(storage => {
-      // Only a count that is actually there can rule a storage out. A host that does not send one
-      // gets asked, because "unknown" is not "empty".
-      const counted =
-        storage.publishedDataMartsCount !== undefined || storage.draftDataMartsCount !== undefined
-      return (
-        !counted || (storage.publishedDataMartsCount ?? 0) + (storage.draftDataMartsCount ?? 0) > 0
-      )
-    })
-    .map(storage => storage.id)
+  const counted = (storage: RawStorage) =>
+    storage.publishedDataMartsCount !== undefined || storage.draftDataMartsCount !== undefined
+  const holds = (storage: RawStorage) =>
+    (storage.publishedDataMartsCount ?? 0) + (storage.draftDataMartsCount ?? 0) > 0
+  const walkable = (storages as RawStorage[]).filter(s => !counted(s) || holds(s)).map(s => s.id)
+  const skipped = (storages as RawStorage[]).filter(s => counted(s) && !holds(s)).map(s => s.id)
   weight.storages = Math.max(1, walkable.length)
 
   const [connectors, rawReports, triggers, quality, health, canvas] = await Promise.all([
@@ -514,7 +513,23 @@ export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) =
   const reportsPerDestination = tally(reports.map(r => r.destinationId))
   const failingMarts = new Set(reports.filter(r => r.lastRunStatus === 'ERROR').map(r => r.martId))
 
-  const place = placeMarts(storages as RawStorage[], canvas.holder)
+  /**
+   * A storage that said it holds nothing, and does, is worth the two requests after all.
+   *
+   * The count skips those storages to save a round trip each, which is right until it is wrong:
+   * on a real project two data marts lived in storages reporting none, and with no walk to place
+   * them they had no storage, so no line from the source that fills them and none to the storage
+   * that holds them. The saving is kept and the claim is checked — the skipped storages are asked
+   * only when a mart is left without one, which on a project whose counts are honest is never.
+   */
+  let place = placeMarts(storages as RawStorage[], canvas.holder)
+  if (skipped.length > 0 && dataMarts.some(m => place(m) === undefined)) {
+    const rest = await perStorage(ctx, skipped)
+    for (const [id, count] of rest.fields) canvas.fields.set(id, count)
+    for (const [id, storageId] of rest.holder) canvas.holder.set(id, storageId)
+    canvas.edges.push(...rest.edges)
+    place = placeMarts(storages as RawStorage[], canvas.holder)
+  }
   const marts: Mart[] = dataMarts
     .map(m => {
       const state = qualityBy.get(m.id)?.state
