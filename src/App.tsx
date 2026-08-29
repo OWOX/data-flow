@@ -728,7 +728,7 @@ function StoragesBlock({
             }}
           />
           <MultiSelect
-            label="Sharing"
+            label="Filter"
             options={STORAGE_FLAGS.map(flag => ({ value: flag.key, label: flag.label, group: flag.facet }))}
             selected={storageFlags}
             onChange={next => {
