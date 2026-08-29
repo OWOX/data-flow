@@ -143,6 +143,22 @@ export function useWires(
    * half thousand elements on a large project, before anything could be drawn.
    */
   const drawn = useRef<SVGPathElement[]>([])
+  /**
+   * Which path actually carries each wire's line.
+   *
+   * Thousands of wires collapse onto a handful of lines — a storage holding a thousand data marts
+   * has one wire to each, and with twenty-five of them on the page the rest all end at the block,
+   * so 1,091 wires resolve to 26 curves. Drawing every one of them meant a thousand identical
+   * strokes stacked on the same pixels, each with its own arrowhead and its own opacity
+   * transition, all fading in together the moment the pointer crossed the card. That is what made
+   * the canvas blink.
+   *
+   * So one path per pair of boxes is drawn and the rest carry no `d` at all, and every wire is
+   * mapped to the one that stands for it. Lighting follows the map, which is what keeps this from
+   * being the old "first wire claims the pair" — that dropped the rest instead of pointing them
+   * somewhere, and a wire lit by its own ends had no line to light.
+   */
+  const leads = useRef(new Map<SVGPathElement, SVGPathElement>())
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -220,20 +236,36 @@ export function useWires(
        * one actually carrying the curve belonged to some other report and stayed dark. No line at
        * all, for a link that exists.
        */
-      const curves = new Map<string, string>()
+      const lead = leads.current
+      lead.clear()
+      const carrier = new Map<string, SVGPathElement>()
       const seat = new Map<Element, number>()
       const numbered = (el: Element) => seat.get(el) ?? (seat.set(el, seat.size), seat.size - 1)
+      /** Nothing to draw any more, so nothing left lit either. */
+      const blank = (path: SVGPathElement) => {
+        path.removeAttribute('d')
+        path.classList.remove('lit', 'outbound', 'inbound')
+      }
       for (const path of paths) {
         const a = at(path.dataset.from)
         const b = at(path.dataset.to)
         // A card the filter has hidden ends its lines rather than leaving them drawn to a ghost,
         // and a line whose ends have folded into the same block would be a loop on one box.
-        if (a && b && a.el !== b.el) {
-          const key = `${numbered(a.el)}>${numbered(b.el)}`
-          const drawn = curves.get(key) ?? curve(a.box, b.box)
-          curves.set(key, drawn)
-          path.setAttribute('d', drawn)
-        } else path.removeAttribute('d')
+        if (!a || !b || a.el === b.el) {
+          blank(path)
+          continue
+        }
+        // Which way round matters: the arrowhead is on one end.
+        const key = `${numbered(a.el)}>${numbered(b.el)}`
+        const held = carrier.get(key)
+        if (held) {
+          blank(path)
+          lead.set(path, held)
+        } else {
+          path.setAttribute('d', curve(a.box, b.box))
+          carrier.set(key, path)
+          lead.set(path, path)
+        }
       }
     }
 
@@ -338,18 +370,26 @@ export function useWires(
       for (const path of alight) path.classList.remove('lit', 'outbound', 'inbound')
       alight = []
       if (id === null) return
+      const lead = leads.current
+      // A thousand wires between the same two boxes light the one line that stands for them all.
+      const on = new Set<SVGPathElement>()
       // Direction is read from the card in hand: a line that leaves it is solid, one that arrives
       // at it is dashed. A line lit through a chain touches neither end, and stays solid.
       for (const path of byId.get(id) ?? []) {
-        path.classList.add('lit', path.dataset.from === id ? 'outbound' : 'inbound')
-        alight.push(path)
+        const line = lead.get(path)
+        if (!line || on.has(line)) continue
+        on.add(line)
+        line.classList.add('lit', path.dataset.from === id ? 'outbound' : 'inbound')
+        alight.push(line)
       }
       for (const key of links) {
         for (const path of byPair.get(key) ?? []) {
-          // A path can be both an end of the pinned card and a link on its chain; it is already on.
-          if (path.classList.contains('lit')) continue
-          path.classList.add('lit')
-          alight.push(path)
+          const line = lead.get(path)
+          // A line can be both an end of the pinned card and a link on its chain; already on.
+          if (!line || on.has(line)) continue
+          on.add(line)
+          line.classList.add('lit')
+          alight.push(line)
         }
       }
     }
