@@ -350,6 +350,9 @@ body { margin: 0; color: var(--foreground); }
 .dm-badge-draft { background: color-mix(in oklab, var(--primary) 15%, transparent); color: var(--primary); }
 
 /* Status glyphs sit on their own line so a long title above cannot push them out of alignment. */
+/* Beside the status marks rather than among them: they say what is true of the mart, this says
+   what the project may do with it. Pushed right so the glyphs stay a set. */
+.dm-shared { margin-left: auto; gap: 0.25rem; }
 .dm-node-foot { display: flex; align-items: center; gap: 0.375rem; margin-top: auto; padding-top: 0.125rem; }
 .dm-status { display: inline-flex; }
 /* A status glyph that explains itself, on the block hint's own bubble. */

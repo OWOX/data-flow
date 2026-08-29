@@ -139,6 +139,20 @@ const QUALITY: Record<string, string> = {
 
 export const qualityLine = (label: string) => QUALITY[label] ?? label
 
+/**
+ * What a data mart is shared for, in OWOX's own words.
+ *
+ * Two independent grants: one every project member can report on, one other technical users may
+ * maintain. A mart shared for neither says nothing rather than saying "not shared" — the absence
+ * of a badge is already that.
+ */
+export function sharedFor(mart: Mart) {
+  if (mart.sharedForMaintenance && mart.sharedForReporting) return 'Maintenance & Reporting'
+  if (mart.sharedForMaintenance) return 'Maintenance'
+  if (mart.sharedForReporting) return 'Reporting'
+  return undefined
+}
+
 /** How many of the mart's checks came back clean, when it has run enough to know. */
 export function qualityChecks(summary?: QualitySummary) {
   const total = summary?.totalChecks ?? 0

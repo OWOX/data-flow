@@ -8,13 +8,23 @@ import {
   History,
   Loader2,
   Plus,
+  Share2,
   Waypoints,
   XCircle,
 } from 'lucide-react'
 import type { PluginContext } from '@owox/plugin-sdk'
 import { useLayoutEffect, useRef } from 'react'
 import { KIND, type Mark } from './icons'
-import { count, freshnessLines, initials, num, qualityChecks, qualityLine, qualityVisual } from './format'
+import {
+  count,
+  freshnessLines,
+  initials,
+  num,
+  qualityChecks,
+  qualityLine,
+  qualityVisual,
+  sharedFor,
+} from './format'
 import { martId, qualityTone, type Mart, type Tone } from './owox'
 import type { DragProps } from './reorder'
 
@@ -134,6 +144,7 @@ export function MartCard({
   // second opinion, and run health stays on the cards that have nothing else to say.
   const tone = qualityTone(quality.tone)
   const freshness = freshnessLines(mart)
+  const sharing = sharedFor(mart)
 
   return (
     <NodeCard
@@ -183,6 +194,12 @@ export function MartCard({
           <Mark tone="idle" lines={freshness}>
             <History size={14} />
           </Mark>
+        )}
+        {/* What the project may do with it, beside what the project knows about it. */}
+        {sharing && (
+          <span className="dm-badge dm-shared" title={`Shared for ${sharing}`}>
+            <Share2 size={12} /> {sharing}
+          </span>
         )}
       </div>
     </NodeCard>

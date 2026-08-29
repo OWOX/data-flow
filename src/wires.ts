@@ -36,11 +36,18 @@ const standIns = (canvas: HTMLElement) =>
     ...canvas.querySelectorAll<HTMLElement>('[data-band][data-holds].folded, [data-standin][data-holds]'),
   ].flatMap(el => (el.dataset.holds ?? '').split(',').map(prefix => [prefix, el] as const))
 
-/** Every card the page is currently showing, by id. */
+/**
+ * Everything on the page a wire can end at, by id.
+ *
+ * Cards, and the blocks themselves — a block is one end of the exit wires, which is how Claude,
+ * ChatGPT and the API reach every data mart at once with a single line each. Looking cards up by
+ * `querySelector` used to find those too, being a search of the whole page; a map built from
+ * `[data-node]` alone quietly lost them.
+ */
 const onPage = (canvas: HTMLElement) => {
-  const cards = new Map<string, HTMLElement>()
-  for (const card of canvas.querySelectorAll<HTMLElement>('[data-node]')) cards.set(card.id, card)
-  return cards
+  const found = new Map<string, HTMLElement>()
+  for (const el of canvas.querySelectorAll<HTMLElement>('[data-node], [data-band]')) found.set(el.id, el)
+  return found
 }
 
 /**
