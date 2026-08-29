@@ -24,6 +24,26 @@ const MEANING: Record<Wire['kind'], string> = {
 const pair = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`)
 
 /**
+ * What stands in for a card that is not on the page, and which cards each stands for.
+ *
+ * A folded block, for the cards it has put away, and a block's "load more" card, for the ones its
+ * page has not reached. Nothing stands in for a card a filter excluded: that card is not hidden,
+ * it is unwanted. One definition, because both drawing a line to a stand-in and lighting it have
+ * to agree about which it is.
+ */
+const standIns = (canvas: HTMLElement) =>
+  [
+    ...canvas.querySelectorAll<HTMLElement>('[data-band][data-holds].folded, [data-standin][data-holds]'),
+  ].flatMap(el => (el.dataset.holds ?? '').split(',').map(prefix => [prefix, el] as const))
+
+/** Every card the page is currently showing, by id. */
+const onPage = (canvas: HTMLElement) => {
+  const cards = new Map<string, HTMLElement>()
+  for (const card of canvas.querySelectorAll<HTMLElement>('[data-node]')) cards.set(card.id, card)
+  return cards
+}
+
+/**
  * What one card lights: its own wires, and every whole chain it sits on — so a report reaches up
  * through its destination to the data mart that feeds it, and on to that mart's source, without
  * lighting every other mart hanging off the same destination.
@@ -152,26 +172,12 @@ export function useWires(
        * than disappearing — the canvas stays connected, and folding hides detail without hiding
        * the shape. Read from the DOM each layout, since folding changes it.
        */
-      /**
-       * What stands in for a card that is not on the page.
-       *
-       * A folded block, for the cards it has put away — and a block's "load more" card, for the
-       * ones its page has not reached. Nothing stands in for a card a filter excluded: that card
-       * is not hidden, it is not wanted.
-       */
-      const bands = [
-        ...canvas.querySelectorAll<HTMLElement>('[data-band][data-holds].folded, [data-standin][data-holds]'),
-      ].flatMap(band => (band.dataset.holds ?? '').split(',').map(prefix => [prefix, band] as const))
+      const bands = standIns(canvas)
       const standIn = (id: string) => bands.find(([prefix]) => id.startsWith(prefix))?.[1] ?? null
 
-      /**
-       * Every card on the page, asked for once.
-       *
-       * A wire per data mart means thousands of endpoints, and a `querySelector` each was thousands
-       * of walks over the same document to find a hundred or so elements. One sweep, then lookups.
-       */
-      const cards = new Map<string, Element>()
-      for (const card of canvas.querySelectorAll<HTMLElement>('[data-node]')) cards.set(card.id, card)
+      // Asked for once: a `querySelector` per endpoint was thousands of walks over the same
+      // document to find the hundred or so elements actually there.
+      const cards = onPage(canvas)
 
       /** And measured once. Thousands of wires end at the same stand-in; its box does not move. */
       const boxes = new Map<Element, Box>()
@@ -255,7 +261,7 @@ export function useWires(
     if (!canvas) return
     const paths = drawn.current
 
-    const cards = () => canvas.querySelectorAll<HTMLElement>('[data-node], [data-band]')
+    const cards = () => canvas.querySelectorAll<HTMLElement>('[data-node], [data-band], [data-standin]')
 
     /**
      * Hover lighting only.
@@ -269,16 +275,18 @@ export function useWires(
       const { lit, links } = id
         ? reach(wires, chains, id)
         : { lit: new Set<string>(), links: new Set<string>() }
-      // What is actually on the page, asked once rather than once per band per lit id.
-      const onPage = new Set([...canvas.querySelectorAll<HTMLElement>('[data-node]')].map(el => el.id))
+      // What is on the page, asked once rather than once per stand-in per lit id.
+      const here = onPage(canvas)
+      const stands = standIns(canvas)
+      const missing = [...lit].filter(node => !here.has(node))
       for (const el of cards()) {
-        // A folded block stands in for the cards it holds, so it takes the border those cards
-        // would have taken: the line ends somewhere visible, and says where.
-        const holds = el.classList.contains('folded') ? el.dataset.holds?.split(',') : undefined
-        const standsIn =
-          holds !== undefined &&
-          [...lit].some(node => !onPage.has(node) && holds.some(prefix => node.startsWith(prefix)))
-        el.classList.toggle('lit', lit.has(el.id) || standsIn)
+        // Whatever stands in for a lit card takes the border that card would have taken, so the
+        // line ends somewhere visible and says where: a folded block, or the page's own
+        // "load more" card.
+        const standsFor = stands.some(
+          ([prefix, standIn]) => standIn === el && missing.some(node => node.startsWith(prefix)),
+        )
+        el.classList.toggle('lit', lit.has(el.id) || standsFor)
       }
       for (const path of paths) {
         const from = path.dataset.from ?? ''
