@@ -181,7 +181,8 @@ body { margin: 0; color: var(--foreground); }
   .dm-band-grid > .dm-turning,
   .dm-band-grid > .dm-leaving { animation: none; }
 }
-.dm-band-grid { display: grid; gap: 0.85rem; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); }
+/* Positioned, so a card leaving the flow can pin itself against this box rather than the page. */
+.dm-band-grid { position: relative; display: grid; gap: 0.85rem; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); }
 .dm-empty { margin: 0; font-size: 0.8125rem; }
 
 /* The block description, on the ⓘ. No `title`: it waits a second, wraps where it likes, and cannot

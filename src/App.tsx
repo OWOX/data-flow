@@ -755,7 +755,13 @@ function StoragesBlock({
         />
       ))}
       {/* Ordered by what each holds, so the empty ones are last in the queue rather than a case. */}
-      <MoreCard shown={storages.length} total={storagesMatching} page={PAGE} onMore={moreStorages} />
+      <MoreCard
+        shown={storages.length}
+        total={storagesMatching}
+        page={PAGE}
+        holds="st-"
+        onMore={moreStorages}
+      />
       <AddCard ctx={ctx} to={`/ui/${ctx.projectId}/data-storages`} label="New storage" />
     </Block>
   )
@@ -792,6 +798,7 @@ function DataMartsBlock({ state, ctx, marts, martCards, martSearch, setMartSearc
         shown={Math.min(limit, marts.length)}
         total={marts.length}
         page={PAGE}
+        holds="dm-"
         onMore={() => setLimit(limit + PAGE)}
       />
       <AddCard ctx={ctx} to={`/ui/${ctx.projectId}/data-marts/create`} label="New data mart" />
@@ -967,6 +974,7 @@ function ReportsBlock({
         shown={Math.min(reportLimit, reports.length)}
         total={reports.length}
         page={PAGE}
+        holds="rp-"
         onMore={() => setReportLimit(reportLimit + PAGE)}
       />
       {reports.length === 0 && (

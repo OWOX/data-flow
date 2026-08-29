@@ -152,12 +152,16 @@ export function useWires(
        * than disappearing — the canvas stays connected, and folding hides detail without hiding
        * the shape. Read from the DOM each layout, since folding changes it.
        */
-      // Only a folded block stands in. A card that is merely past its block's page, or behind a
-      // filter, is not there to be drawn to — and treating those the same drew four thousand
-      // identical curves between two rectangles on a project with four thousand data marts.
-      const bands = [...canvas.querySelectorAll<HTMLElement>('[data-band][data-holds].folded')].flatMap(
-        band => (band.dataset.holds ?? '').split(',').map(prefix => [prefix, band] as const),
-      )
+      /**
+       * What stands in for a card that is not on the page.
+       *
+       * A folded block, for the cards it has put away — and a block's "load more" card, for the
+       * ones its page has not reached. Nothing stands in for a card a filter excluded: that card
+       * is not hidden, it is not wanted.
+       */
+      const bands = [
+        ...canvas.querySelectorAll<HTMLElement>('[data-band][data-holds].folded, [data-standin][data-holds]'),
+      ].flatMap(band => (band.dataset.holds ?? '').split(',').map(prefix => [prefix, band] as const))
       const standIn = (id: string) => bands.find(([prefix]) => id.startsWith(prefix))?.[1] ?? null
 
       const at = (id?: string): { el: Element; box: Box } | null => {
@@ -176,13 +180,27 @@ export function useWires(
           },
         }
       }
+      /**
+       * One line per pair of things actually on the page.
+       *
+       * Thousands of wires can end at the same stand-in — every data mart a storage holds, every
+       * one past the page — and drawn separately they are thousands of identical curves between
+       * the same two boxes. The first claims the pair; the rest say the same thing and are left
+       * undrawn, which costs nothing and looks no different.
+       */
+      const drawnPairs = new Set<string>()
+      const seat = new Map<Element, number>()
+      const numbered = (el: Element) => seat.get(el) ?? (seat.set(el, seat.size), seat.size - 1)
       for (const path of paths) {
         const a = at(path.dataset.from)
         const b = at(path.dataset.to)
         // A card the filter has hidden ends its lines rather than leaving them drawn to a ghost,
         // and a line whose ends have folded into the same block would be a loop on one box.
-        if (a && b && a.el !== b.el) path.setAttribute('d', curve(a.box, b.box))
-        else path.removeAttribute('d')
+        const pairKey = a && b ? `${numbered(a.el)}>${numbered(b.el)}` : null
+        if (a && b && a.el !== b.el && pairKey !== null && !drawnPairs.has(pairKey)) {
+          drawnPairs.add(pairKey)
+          path.setAttribute('d', curve(a.box, b.box))
+        } else path.removeAttribute('d')
       }
     }
 

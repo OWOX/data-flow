@@ -4,6 +4,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 export type DragProps = {
   draggable: true
   className?: string
+  /** Marks a card as on its way out, so it can pin itself where it stood. */
+  'data-leaving'?: ''
   onDragStart: (e: React.DragEvent) => void
   onDragOver: (e: React.DragEvent) => void
   onDragEnd: () => void
@@ -144,6 +146,7 @@ export function useReorder<T>(items: T[], idOf: (item: T) => string): Cards<T> {
     return {
       draggable: true,
       className: [marker, going, arriving].filter(Boolean).join(' ') || undefined,
+      ...(going ? { 'data-leaving': '' as const } : {}),
       onDragStart: e => {
         dragged.current = id
         e.dataTransfer.effectAllowed = 'move'

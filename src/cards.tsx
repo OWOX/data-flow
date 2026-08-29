@@ -12,6 +12,7 @@ import {
   XCircle,
 } from 'lucide-react'
 import type { PluginContext } from '@owox/plugin-sdk'
+import { useLayoutEffect, useRef } from 'react'
 import { KIND, type Mark } from './icons'
 import { count, freshnessLines, initials, num, qualityChecks, qualityLine, qualityVisual } from './format'
 import { martId, qualityTone, type Mart, type Tone } from './owox'
@@ -59,8 +60,29 @@ export function NodeCard({
   badgeRow?: boolean
   children?: React.ReactNode
 }) {
+  /**
+   * A card on its way out steps out of the grid and stays where it stood.
+   *
+   * Left in the flow it keeps its cell for the whole collapse, so everything after it waits, then
+   * jumps when it finally goes. Pinned, the grid closes up at once and the card shrinks over the
+   * space it used to hold. Measured in a layout effect, in the same commit that marked it leaving,
+   * so it is read before the browser has drawn anything.
+   */
+  const self = useRef<HTMLElement>(null)
+  useLayoutEffect(() => {
+    const card = self.current
+    if (!card || card.dataset.leaving === undefined) return
+    const { offsetLeft, offsetTop, offsetWidth, offsetHeight } = card
+    card.style.position = 'absolute'
+    card.style.left = `${offsetLeft}px`
+    card.style.top = `${offsetTop}px`
+    card.style.width = `${offsetWidth}px`
+    card.style.height = `${offsetHeight}px`
+  }, [drag?.className])
+
   return (
     <article
+      ref={self}
       id={id}
       data-node
       data-tone={tone}
@@ -170,17 +192,26 @@ export function MoreCard({
   shown,
   total,
   page,
+  holds,
   onMore,
 }: {
   shown: number
   total: number
   page: number
+  /** The card-id prefix it stands for: lines to cards this page is hiding end here. */
+  holds?: string
   onMore: () => void
 }) {
   if (shown >= total) return null
   const left = total - shown
   return (
-    <button type="button" className="dm-node dm-add" onClick={onMore}>
+    <button
+      type="button"
+      className="dm-node dm-add"
+      data-standin={holds === undefined ? undefined : ''}
+      data-holds={holds}
+      onClick={onMore}
+    >
       <ChevronDown size={18} />
       <span>Load {num(Math.min(page, left))} more</span>
       {/* The count of what is still hidden, which the button's own number never repeats: on the
