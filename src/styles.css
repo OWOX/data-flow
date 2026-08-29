@@ -68,10 +68,6 @@ body { margin: 0; color: var(--foreground); }
 #wires path.lit { opacity: 1; }
 /* A route no report has ever run: drawn, but plainly not carrying anything. */
 #wires .dormant.lit { opacity: 0.45; }
-/* Direction, read from the card in hand: a line leaving it is drawn full, one arriving at it thin.
-   Weight rather than dashes, so every line on the canvas is solid and only its size and colour
-   ever differ. */
-#wires path.lit.inbound { stroke-width: 1; }
 
 /* The block chrome OWOX itself uses for Storage / Input Source / Output schema: a light panel with
    a rounded icon tile beside the title, no shadow, a hairline under it. */
@@ -421,6 +417,12 @@ button.dm-mark { cursor: pointer; }
    last column of the grid, which `auto-fill` re-counts on every resize. */
 .dm-new { grid-column: -2 / -1; }
 .dm-canvas.focused #wires path.lit { stroke-width: 2; }
+/* Direction, read from the card in hand: a line leaving it is drawn full, one arriving at it thin.
+   Weight rather than dashes, so every line on the canvas is solid and only its size and colour
+   ever differ. Written against `.dm-canvas.focused` because that is what lights a line in the
+   first place, and the rule that thickens a lit line is written the same way — an `#wires
+   path.lit.inbound` on its own is outranked by it and never applies. */
+.dm-canvas.focused #wires path.lit.inbound { stroke-width: 1; }
 /* Selected outranks hovered, and reads as the same colour one ring thicker. */
 .dm-node[aria-pressed='true'],
 .dm-node[aria-pressed='true']:hover {
