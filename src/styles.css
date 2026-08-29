@@ -97,24 +97,7 @@ body { margin: 0; color: var(--foreground); }
 /* Wraps: the toolbar has a search box and three filter menus, and unwrapped they hold the header —
    and so the whole band and its card grid — wider than a narrow viewport. */
 /* The space around the controls folds the block, so the whole row answers to the pointer. */
-/*
- * The title row masks the lines running under it.
- *
- * It already painted above them — z-index 5 against the wires' 1 — but paint order alone hides
- * nothing when the thing on top is transparent, so a line crossed the words and the title became
- * hard to read. The row takes the band's own colour at nine tenths, which covers the line where it
- * matters and still lets it be followed faintly across.
- */
-.dm-band-head {
-  position: relative; z-index: 5;
-  display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem;
-  margin-bottom: 0.75rem; cursor: pointer;
-  background: color-mix(in oklab, color-mix(in oklab, var(--muted) 50%, var(--background)) 90%, transparent);
-  border-radius: 0.375rem;
-}
-:root.dark .dm-band-head {
-  background: color-mix(in oklab, color-mix(in oklab, white 4%, var(--background)) 90%, transparent);
-}
+.dm-band-head { position: relative; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; cursor: pointer; }
 /* Folded, the header is the whole block: its own bottom margin goes, and the block's padding is
    even top and bottom rather than the extra it leaves under a grid. */
 .dm-band.folded { padding-bottom: 0.75rem; }
@@ -126,7 +109,25 @@ body { margin: 0; color: var(--foreground); }
   color: var(--foreground);
 }
 :root.dark .dm-band-icon { background: color-mix(in oklab, white 8%, transparent); }
-.dm-band-title { margin: 0; font-size: 0.9375rem; font-weight: 500; line-height: 1; }
+/*
+ * The words themselves mask the line, and nothing more.
+ *
+ * The title already painted above the wires — z-index 5 against 1 — but paint order hides nothing
+ * when the thing on top is transparent, so a line ran straight through the letters. It carries the
+ * band's own colour at nine tenths: enough to read the title over, little enough that the line can
+ * still be followed across it. The row keeps no background of its own, so a line crosses the empty
+ * stretch beside the title untouched.
+ *
+ * The icon tile and the count wear their own backgrounds already, and mask it the same way.
+ */
+.dm-band-title {
+  margin: 0; padding: 0.125rem 0.3125rem; font-size: 0.9375rem; font-weight: 500; line-height: 1;
+  background: color-mix(in oklab, color-mix(in oklab, var(--muted) 50%, var(--background)) 90%, transparent);
+  border-radius: 0.25rem;
+}
+:root.dark .dm-band-title {
+  background: color-mix(in oklab, color-mix(in oklab, white 4%, var(--background)) 90%, transparent);
+}
 /* Same fill as the title's icon tile beside it, so the two read as one header. */
 .dm-band-count {
   font-size: 0.75rem; padding: 0.0625rem 0.4375rem;
