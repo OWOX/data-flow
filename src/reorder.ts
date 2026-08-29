@@ -1,5 +1,5 @@
 // Cards a reader can drag into their own order.
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 export type DragProps = {
   draggable: true
@@ -21,16 +21,49 @@ export type DragProps = {
 /** What a block hands to its cards: the items in order, and how to drag one. */
 export type Cards<T> = { items: T[]; dragProps: (item: T) => DragProps; key: string }
 
+/** Long enough to read as motion, short enough that nobody waits for it. */
+const LEAVING_MS = 250
+
 export function useReorder<T>(items: T[], idOf: (item: T) => string): Cards<T> {
   const [order, setOrder] = useState<string[]>([])
+  /**
+   * Cards on their way out.
+   *
+   * A card cannot collapse once it has been unmounted, so one that stops matching keeps its place
+   * for as long as the animation lasts and then goes. It stays a real card while it shrinks — the
+   * wires still find it, and `getBoundingClientRect` reports the box it is scaled to, so its lines
+   * follow it into the point rather than snapping away before it has left.
+   */
+  const [leaving, setLeaving] = useState<Array<{ item: T; at: number }>>([])
+  const shown = useRef<T[]>(items)
+
+  useEffect(() => {
+    const here = new Set(items.map(idOf))
+    const gone = shown.current.map((item, at) => ({ item, at })).filter(({ item }) => !here.has(idOf(item)))
+    shown.current = items
+    if (gone.length === 0) return
+    setLeaving(gone)
+    const timer = setTimeout(() => setLeaving([]), LEAVING_MS)
+    return () => clearTimeout(timer)
+  }, [items, idOf])
   const [drop, setDrop] = useState<{ id: string; after: boolean } | null>(null)
   const dragged = useRef<string | null>(null)
 
   const ordered = useMemo(() => {
-    if (order.length === 0) return items
     const rank = new Map(order.map((id, i) => [id, i]))
-    return [...items].sort((a, b) => (rank.get(idOf(a)) ?? Infinity) - (rank.get(idOf(b)) ?? Infinity))
-  }, [items, order, idOf])
+    const live =
+      order.length === 0
+        ? items
+        : [...items].sort((a, b) => (rank.get(idOf(a)) ?? Infinity) - (rank.get(idOf(b)) ?? Infinity))
+    if (leaving.length === 0) return live
+    // A card on its way out shrinks where it stood, rather than jumping to the end to do it.
+    const here = new Set(items.map(idOf))
+    const withLeaving = [...live]
+    for (const { item, at } of leaving) {
+      if (!here.has(idOf(item))) withLeaving.splice(Math.min(at, withLeaving.length), 0, item)
+    }
+    return withLeaving
+  }, [items, leaving, order, idOf])
 
   const side = (e: React.DragEvent) => {
     const box = e.currentTarget.getBoundingClientRect()
@@ -51,6 +84,7 @@ export function useReorder<T>(items: T[], idOf: (item: T) => string): Cards<T> {
 
   const dragProps = (item: T): DragProps => {
     const id = idOf(item)
+    const going = leaving.some(other => idOf(other.item) === id) ? 'dm-leaving' : ''
     const marker =
       dragged.current === id
         ? 'dm-dragging'
@@ -61,7 +95,7 @@ export function useReorder<T>(items: T[], idOf: (item: T) => string): Cards<T> {
           : undefined
     return {
       draggable: true,
-      className: marker,
+      className: [marker, going].filter(Boolean).join(' ') || undefined,
       onDragStart: e => {
         dragged.current = id
         e.dataTransfer.effectAllowed = 'move'
