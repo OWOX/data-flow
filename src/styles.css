@@ -344,7 +344,7 @@ body { margin: 0; color: var(--foreground); }
 .dm-link { display: inline-flex; color: var(--muted-foreground); }
 .dm-link:hover { color: var(--foreground); }
 
-.dm-badges { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.dm-badges { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem; }
 /* One line: the badges that fit stay whole, and the one that does not is cut short. */
 .dm-badges-row { flex-wrap: nowrap; overflow: hidden; }
 .dm-badges-row .dm-badge { flex-shrink: 0; white-space: nowrap; }
@@ -366,9 +366,11 @@ body { margin: 0; color: var(--foreground); }
    be done with it and whose it is. An icon and no words: three sharing states across three kinds of
    card cost more room in a row of badges than they were ever worth, and the hint says which it is.
    Whichever of the two comes first takes the gap, so the pair ends flush right whether a card has
-   sharing to show — a data mart, a storage, a destination — or only people, as a report does. */
-.dm-node-foot .dm-shared, .dm-node-foot .dm-people { margin-left: auto; }
-.dm-node-foot .dm-shared + .dm-people { margin-left: 0; }
+   sharing to show — a data mart, a storage, a destination — or only people, as a report does.
+   Unscoped, because the pair sits in a card's foot on a data mart and a report and on the badge
+   line itself on a storage and a destination, where it is the only other thing on the row. */
+.dm-shared, .dm-people { margin-left: auto; }
+.dm-shared + .dm-people { margin-left: 0; }
 .dm-node-foot { display: flex; align-items: center; gap: 0.375rem; margin-top: auto; padding-top: 0.125rem; }
 .dm-status { display: inline-flex; }
 /* A status glyph that explains itself, on the block hint's own bubble. */

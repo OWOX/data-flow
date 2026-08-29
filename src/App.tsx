@@ -771,20 +771,16 @@ function StoragesBlock({
           mark={<Logo icon={STORAGE[storage.type]?.icon ?? Database} />}
           title={storage.title}
           hint={STORAGE[storage.type]?.label ?? storage.type}
-          badgeRow
           badges={
             <>
               <span className="dm-badge">{count(storage.marts, 'data mart')}</span>
+              <Shared what={sharedFor(storage.sharedForMaintenance, storage.sharedForUse, 'use')} />
+              <People people={storage.people} />
             </>
           }
           link={`/ui/${ctx.projectId}/data-storages?id=${encodeURIComponent(storage.id)}`}
           linkTitle="Open this storage"
-        >
-          <div className="dm-node-foot">
-            <Shared what={sharedFor(storage.sharedForMaintenance, storage.sharedForUse, 'use')} />
-            <People people={storage.people} />
-          </div>
-        </NodeCard>
+        />
       ))}
       {/* Ordered by what each holds, so the empty ones are last in the queue rather than a case. */}
       <MoreCard
@@ -875,20 +871,16 @@ function DestinationsBlock({ state, ctx, model, destinations, destinationCards, 
           tone={destination.tone}
           mark={<Logo icon={DESTINATION[destination.type]?.icon ?? ArchiveRestore} />}
           title={destination.title}
-          badgeRow
           badges={
             <>
               <span className="dm-badge">{count(destination.reports, 'report')}</span>
+              <Shared what={sharedFor(destination.sharedForMaintenance, destination.sharedForUse, 'use')} />
+              <People people={destination.people} />
             </>
           }
           link={`/ui/${ctx.projectId}/data-destinations?id=${encodeURIComponent(destination.id)}`}
           linkTitle="Open this destination"
-        >
-          <div className="dm-node-foot">
-            <Shared what={sharedFor(destination.sharedForMaintenance, destination.sharedForUse, 'use')} />
-            <People people={destination.people} />
-          </div>
-        </NodeCard>
+        />
       ))}
       {exitCards.items.map(exit => (
         <NodeCard
