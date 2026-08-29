@@ -284,6 +284,33 @@ export function useWires(
     const cards = () => canvas.querySelectorAll<HTMLElement>('[data-node], [data-band], [data-standin]')
 
     /**
+     * Which paths a card lights, and which a chain lights, worked out once for the whole effect.
+     *
+     * There is one path per wire, and a project can have thousands — a storage alone has one to
+     * every data mart it holds. Asking each of them "is it me?" on every pointer move, and writing
+     * three classes on it either way, was tens of thousands of style invalidations a second while
+     * the pointer crossed a row of storages. Chrome falls behind that and starts dropping the
+     * tiles it has already rastered, which is a page that goes white below wherever it gave up
+     * while the cards under it still answer the mouse.
+     */
+    const byId = new Map<string, SVGPathElement[]>()
+    const byPair = new Map<string, SVGPathElement[]>()
+    const file = (index: Map<string, SVGPathElement[]>, key: string, path: SVGPathElement) => {
+      const kept = index.get(key)
+      if (kept) kept.push(path)
+      else index.set(key, [path])
+    }
+    for (const path of paths) {
+      const from = path.dataset.from ?? ''
+      const to = path.dataset.to ?? ''
+      file(byId, from, path)
+      file(byId, to, path)
+      file(byPair, pair(from, to), path)
+    }
+    /** The paths currently carrying the classes, so putting them out costs their own number. */
+    let alight: SVGPathElement[] = []
+
+    /**
      * Hover lighting only.
      *
      * A pinned card's lighting is rendered by the page: React rewrites `className` and
@@ -308,16 +335,40 @@ export function useWires(
         )
         el.classList.toggle('lit', lit.has(el.id) || standsFor)
       }
-      for (const path of paths) {
-        const from = path.dataset.from ?? ''
-        const to = path.dataset.to ?? ''
-        const on = Boolean(id) && (from === id || to === id || links.has(pair(from, to)))
-        path.classList.toggle('lit', on)
-        // Direction is read from the card in hand: a line that leaves it is solid, one that
-        // arrives at it is dashed. A line lit through a chain touches neither end, and stays solid.
-        path.classList.toggle('outbound', on && from === id)
-        path.classList.toggle('inbound', on && to === id)
+      for (const path of alight) path.classList.remove('lit', 'outbound', 'inbound')
+      alight = []
+      if (id === null) return
+      // Direction is read from the card in hand: a line that leaves it is solid, one that arrives
+      // at it is dashed. A line lit through a chain touches neither end, and stays solid.
+      for (const path of byId.get(id) ?? []) {
+        path.classList.add('lit', path.dataset.from === id ? 'outbound' : 'inbound')
+        alight.push(path)
       }
+      for (const key of links) {
+        for (const path of byPair.get(key) ?? []) {
+          // A path can be both an end of the pinned card and a link on its chain; it is already on.
+          if (path.classList.contains('lit')) continue
+          path.classList.add('lit')
+          alight.push(path)
+        }
+      }
+    }
+
+    /**
+     * One update a frame.
+     *
+     * `pointerover` fires per card crossed, so sweeping a row of storages asks for a dozen
+     * relightings inside one frame and only the last one is ever seen. Coalescing them is what
+     * keeps a fast pointer from being more work than a slow one.
+     */
+    let wanted: string | null = null
+    let queued = 0
+    const relight = (id: string | null) => {
+      wanted = id
+      queued ||= requestAnimationFrame(() => {
+        queued = 0
+        focus(wanted)
+      })
     }
     focus(pinned ?? hovered.current)
 
@@ -325,11 +376,11 @@ export function useWires(
     const enter = (e: Event) => {
       hovered.current = (e.target as HTMLElement).closest<HTMLElement>('[data-node]')?.id ?? null
       if (pinned) return
-      focus(hovered.current)
+      relight(hovered.current)
     }
     const leave = () => {
       hovered.current = null
-      if (!pinned) focus(null)
+      if (!pinned) relight(null)
     }
     const click = (e: MouseEvent) => {
       const target = e.target as HTMLElement
@@ -359,6 +410,7 @@ export function useWires(
     document.addEventListener('keydown', keydown)
 
     return () => {
+      cancelAnimationFrame(queued)
       canvas.removeEventListener('pointerover', enter)
       canvas.removeEventListener('focusin', enter)
       canvas.removeEventListener('pointerleave', leave)
