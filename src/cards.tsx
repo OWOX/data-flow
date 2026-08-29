@@ -144,7 +144,7 @@ export function MartCard({
   // second opinion, and run health stays on the cards that have nothing else to say.
   const tone = qualityTone(quality.tone)
   const freshness = freshnessLines(mart)
-  const sharing = sharedFor(mart)
+  const sharing = sharedFor(mart.sharedForMaintenance, mart.sharedForReporting, 'Reporting')
 
   return (
     <NodeCard
@@ -196,11 +196,7 @@ export function MartCard({
           </Mark>
         )}
         {/* What the project may do with it, beside what the project knows about it. */}
-        {sharing && (
-          <span className="dm-badge dm-shared" title={`Shared for ${sharing}`}>
-            <Share2 size={12} /> {sharing}
-          </span>
-        )}
+        <Shared what={sharing} />
       </div>
     </NodeCard>
   )
@@ -288,6 +284,16 @@ export function AppLink({
     >
       {children}
     </a>
+  )
+}
+
+/** What a thing is shared for, or nothing at all when it is shared for neither. */
+export function Shared({ what }: { what?: string }) {
+  if (!what) return null
+  return (
+    <span className="dm-badge dm-shared" title={`Shared for ${what}`}>
+      <Share2 size={12} /> {what}
+    </span>
   )
 }
 

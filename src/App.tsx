@@ -15,8 +15,8 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AddCard, Logo, MartCard, MoreCard, NodeCard, RunIcon, type CardState } from './cards'
-import { ago, count, reportName, scheduleLabel } from './format'
+import { AddCard, Logo, MartCard, MoreCard, NodeCard, RunIcon, Shared, type CardState } from './cards'
+import { ago, count, reportName, scheduleLabel, sharedFor } from './format'
 import { Block, MultiSelect, SearchBox } from './controls'
 import { DESTINATION, EXIT, STORAGE, type Mark } from './icons'
 import {
@@ -749,7 +749,13 @@ function StoragesBlock({
           mark={<Logo icon={STORAGE[storage.type]?.icon ?? Database} />}
           title={storage.title}
           hint={STORAGE[storage.type]?.label ?? storage.type}
-          badge={count(storage.marts, 'data mart')}
+          badgeRow
+          badges={
+            <>
+              <span className="dm-badge">{count(storage.marts, 'data mart')}</span>
+              <Shared what={sharedFor(storage.sharedForMaintenance, storage.sharedForUse, 'Use')} />
+            </>
+          }
           link={`/ui/${ctx.projectId}/data-storages?id=${encodeURIComponent(storage.id)}`}
           linkTitle="Open this storage"
         />
@@ -846,7 +852,13 @@ function DestinationsBlock({ state, ctx, model, destinations, destinationCards, 
           tone={destination.tone}
           mark={<Logo icon={DESTINATION[destination.type]?.icon ?? ArchiveRestore} />}
           title={destination.title}
-          badge={count(destination.reports, 'report')}
+          badgeRow
+          badges={
+            <>
+              <span className="dm-badge">{count(destination.reports, 'report')}</span>
+              <Shared what={sharedFor(destination.sharedForMaintenance, destination.sharedForUse, 'Use')} />
+            </>
+          }
           link={`/ui/${ctx.projectId}/data-destinations?id=${encodeURIComponent(destination.id)}`}
           linkTitle="Open this destination"
         />

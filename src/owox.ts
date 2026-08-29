@@ -122,7 +122,17 @@ export type Mart = {
 }
 
 export type DestinationType = { type: string; destinations: number }
-export type Destination = { id: string; title: string; type: string; reports: number; tone: Tone }
+export type Destination = {
+  id: string
+  title: string
+  type: string
+  reports: number
+  tone: Tone
+  /** Every project member can write to it. */
+  sharedForUse: boolean
+  /** Technical users who do not own it can maintain it. */
+  sharedForMaintenance: boolean
+}
 
 export type Report = {
   id: string
@@ -584,6 +594,8 @@ export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) =
         type: d.type,
         reports: reportsPerDestination.get(d.id) ?? 0,
         tone: tone(destinationRuns.get(d.id) ?? []),
+        sharedForUse: d.availableForUse === true,
+        sharedForMaintenance: d.availableForMaintenance === true,
       }))
       .sort((a, b) => b.reports - a.reports || a.title.localeCompare(b.title)),
     reports: reports.sort((a, b) => (b.lastRunAt ?? '').localeCompare(a.lastRunAt ?? '')),
