@@ -158,7 +158,7 @@ export type Wire = {
   from: string
   to: string
   /** `dormant` is a route that exists but has never carried data: drawn only when selected. */
-  kind: 'source' | 'held' | 'relationship' | 'report' | 'dormant' | 'run' | 'exit'
+  kind: 'source' | 'held' | 'relationship' | 'report' | 'dormant' | 'run' | 'direct' | 'exit'
 }
 
 export type Storage = {
@@ -189,18 +189,6 @@ export type Model = {
    */
   chains: string[][]
 }
-
-/**
- * The blocks, as ends of a line.
- *
- * A member cannot always see every storage or destination in their own project, and a link through
- * one they cannot see is still a link. Rather than drop it, or draw a shortcut that claims the two
- * ends meet directly, the line runs to the block that would have held the missing card — the same
- * way the exits reach every data mart at once.
- */
-export const STORAGES_BLOCK = 'storages-block'
-export const MARTS_BLOCK = 'marts-block'
-export const DESTINATIONS_BLOCK = 'destinations-block'
 
 export const sourceId = (key: string) => `src-${key.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`
 export const storeId = (id: string) => `st-${id}`
@@ -427,23 +415,22 @@ export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) =
   ])
 
   /**
-   * Storages worth asking about.
+   * Storages worth asking about first.
    *
-   * This route costs two round trips per storage whatever it holds, and the storage list already
-   * says how many data marts each has — so an empty one is two requests that return two empty
-   * lists. A mart in a storage skipped here still finds it by title and type.
+   * The route costs two round trips per storage whatever it holds, and the storage list says how
+   * many data marts each has — so one that says none is two requests returning two empty lists.
+   * Only a count that is actually there can rule a storage out: a host that sends none gets asked,
+   * because unknown is not empty.
+   *
+   * The count is taken as a hint, not as truth. It is checked below against the marts it was meant
+   * to account for.
    */
-  const walkable = (storages as RawStorage[])
-    .filter(storage => {
-      // Only a count that is actually there can rule a storage out. A host that does not send one
-      // gets asked, because "unknown" is not "empty".
-      const counted =
-        storage.publishedDataMartsCount !== undefined || storage.draftDataMartsCount !== undefined
-      return (
-        !counted || (storage.publishedDataMartsCount ?? 0) + (storage.draftDataMartsCount ?? 0) > 0
-      )
-    })
-    .map(storage => storage.id)
+  const counted = (storage: RawStorage) =>
+    storage.publishedDataMartsCount !== undefined || storage.draftDataMartsCount !== undefined
+  const holds = (storage: RawStorage) =>
+    (storage.publishedDataMartsCount ?? 0) + (storage.draftDataMartsCount ?? 0) > 0
+  const walkable = (storages as RawStorage[]).filter(s => !counted(s) || holds(s)).map(s => s.id)
+  const skipped = (storages as RawStorage[]).filter(s => counted(s) && !holds(s)).map(s => s.id)
   weight.storages = Math.max(1, walkable.length)
 
   const [connectors, rawReports, triggers, quality, health, canvas] = await Promise.all([
@@ -526,7 +513,23 @@ export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) =
   const reportsPerDestination = tally(reports.map(r => r.destinationId))
   const failingMarts = new Set(reports.filter(r => r.lastRunStatus === 'ERROR').map(r => r.martId))
 
-  const place = placeMarts(storages as RawStorage[], canvas.holder)
+  /**
+   * A storage that said it holds nothing, and does, is worth the two requests after all.
+   *
+   * The count skips those storages to save a round trip each, which is right until it is wrong:
+   * on a real project two data marts lived in storages reporting none, and with no walk to place
+   * them they had no storage, so no line from the source that fills them and none to the storage
+   * that holds them. The saving is kept and the claim is checked — the skipped storages are asked
+   * only when a mart is left without one, which on a project whose counts are honest is never.
+   */
+  let place = placeMarts(storages as RawStorage[], canvas.holder)
+  if (skipped.length > 0 && dataMarts.some(m => place(m) === undefined)) {
+    const rest = await perStorage(ctx, skipped)
+    for (const [id, count] of rest.fields) canvas.fields.set(id, count)
+    for (const [id, storageId] of rest.holder) canvas.holder.set(id, storageId)
+    canvas.edges.push(...rest.edges)
+    place = placeMarts(storages as RawStorage[], canvas.holder)
+  }
   const marts: Mart[] = dataMarts
     .map(m => {
       const state = qualityBy.get(m.id)?.state
@@ -634,16 +637,14 @@ function drawWires(
   // rather than one per mart: a connector feeding forty marts into one storage is one arrow.
   const landed = new Set<string>()
   for (const mart of marts) {
-    // Where the storage cannot be seen, the block stands for it: the mart is in one of them.
-    const holder = mart.storageId ? storeId(mart.storageId) : STORAGES_BLOCK
-    if (mart.source && sources.has(mart.source)) {
-      const key = `${mart.source}>${holder}`
+    if (mart.source && sources.has(mart.source) && mart.storageId) {
+      const key = `${mart.source}>${mart.storageId}`
       if (!landed.has(key)) {
         landed.add(key)
-        wires.push({ from: sourceId(mart.source), to: holder, kind: 'source' })
+        wires.push({ from: sourceId(mart.source), to: storeId(mart.storageId), kind: 'source' })
       }
     }
-    wires.push({ from: holder, to: martId(mart.id), kind: 'held' })
+    if (mart.storageId) wires.push({ from: storeId(mart.storageId), to: martId(mart.id), kind: 'held' })
   }
   for (const edge of edges) {
     wires.push({ from: martId(edge.from), to: martId(edge.to), kind: 'relationship' })
@@ -655,24 +656,21 @@ function drawWires(
   // selected, so the canvas shows the data's actual routes without losing the intended ones.
   const routes = new Map<string, boolean>()
   for (const report of reports) {
-    if (!report.martId || !known.has(report.martId)) continue
-    // Where the destination cannot be seen, the block stands for it: it writes to one of them.
-    const into =
-      report.destinationId && destinationBy.has(report.destinationId)
-        ? destId(report.destinationId)
-        : DESTINATIONS_BLOCK
-    const key = `${report.martId}>${into}`
+    if (!report.martId || !report.destinationId || !known.has(report.martId)) continue
+    if (!destinationBy.has(report.destinationId)) continue
+    const key = `${report.martId}>${report.destinationId}`
     routes.set(key, Boolean(routes.get(key)) || Boolean(report.lastRunAt))
   }
   for (const [key, live] of routes) {
     const [from, to] = key.split('>')
-    wires.push({ from: martId(from), to, kind: live ? 'report' : 'dormant' })
+    wires.push({ from: martId(from), to: destId(to), kind: live ? 'report' : 'dormant' })
   }
   for (const report of reports) {
     if (report.destinationId && destinationBy.has(report.destinationId)) {
       wires.push({ from: destId(report.destinationId), to: reportId(report.id), kind: 'run' })
-    } else {
-      wires.push({ from: DESTINATIONS_BLOCK, to: reportId(report.id), kind: 'run' })
+    } else if (report.martId && known.has(report.martId)) {
+      // Nowhere to route it through, but the mart it reads is right there.
+      wires.push({ from: martId(report.martId), to: reportId(report.id), kind: 'direct' })
     }
   }
 
@@ -703,10 +701,9 @@ function traceChains(
     chains.push(
       [
         mart?.source && sources.has(mart.source) ? sourceId(mart.source) : undefined,
-        // A block stands where a card cannot be seen, so the chain runs through it unbroken.
-        mart ? (mart.storageId ? storeId(mart.storageId) : STORAGES_BLOCK) : undefined,
+        mart?.storageId ? storeId(mart.storageId) : undefined,
         mart ? martId(mart.id) : undefined,
-        destination ? destId(destination.id) : mart ? DESTINATIONS_BLOCK : undefined,
+        destination ? destId(destination.id) : undefined,
         reportId(report.id),
       ].filter((id): id is string => Boolean(id)),
     )
@@ -716,7 +713,7 @@ function traceChains(
     if (mart.reports > 0) continue
     const chain = [
       mart.source && sources.has(mart.source) ? sourceId(mart.source) : undefined,
-      mart.storageId ? storeId(mart.storageId) : STORAGES_BLOCK,
+      mart.storageId ? storeId(mart.storageId) : undefined,
       martId(mart.id),
     ].filter((id): id is string => Boolean(id))
     if (chain.length > 1) chains.push(chain)

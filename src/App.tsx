@@ -27,9 +27,6 @@ import {
   settling,
   sourceId,
   storeId,
-  DESTINATIONS_BLOCK,
-  MARTS_BLOCK,
-  STORAGES_BLOCK,
   type Destination,
   type Mart,
   type Model,
@@ -136,7 +133,7 @@ const EXIT_TYPES = [
  * An exit reads every data mart in the project, so drawing it a line per card would be fifty lines
  * saying one thing. It gets one line to the block, and the block takes a border.
  */
-const MARTS = MARTS_BLOCK
+const MARTS = 'marts-block'
 /**
  * Each block's own id, and the card ids it holds.
  *
@@ -145,9 +142,9 @@ const MARTS = MARTS_BLOCK
  */
 const BANDS = {
   sources: { id: 'sources-block', holds: 'src-' },
-  storages: { id: STORAGES_BLOCK, holds: 'st-' },
+  storages: { id: 'storages-block', holds: 'st-' },
   marts: { id: MARTS, holds: 'dm-' },
-  destinations: { id: DESTINATIONS_BLOCK, holds: 'dd-,x-' },
+  destinations: { id: 'destinations-block', holds: 'dd-,x-' },
   reports: { id: 'reports-block', holds: 'rp-' },
 }
 const EXIT_WIRES: Wire[] = EXITS.map(exit => ({ from: exit.id, to: MARTS, kind: 'exit' }))
