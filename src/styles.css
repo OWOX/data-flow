@@ -417,12 +417,19 @@ button.dm-mark { cursor: pointer; }
    last column of the grid, which `auto-fill` re-counts on every resize. */
 .dm-new { grid-column: -2 / -1; }
 .dm-canvas.focused #wires path.lit { stroke-width: 2; }
-/* Direction, read from the card in hand: a line leaving it is drawn full, one arriving at it thin.
-   Weight rather than dashes, so every line on the canvas is solid and only its size and colour
-   ever differ. Written against `.dm-canvas.focused` because that is what lights a line in the
-   first place, and the rule that thickens a lit line is written the same way — an `#wires
-   path.lit.inbound` on its own is outranked by it and never applies. */
-.dm-canvas.focused #wires path.lit.inbound { stroke-width: 1; }
+/*
+ * Direction, but only where direction is the whole of what a line says.
+ *
+ * A relationship is a join between two data marts, and which way it points is its meaning — so one
+ * arriving at the card in hand is drawn thin against the ones leaving it. Every other line crosses
+ * from one block to the next, where the blocks themselves already say which way it goes, and stays
+ * at full weight in both directions.
+ *
+ * Written against `.dm-canvas.focused` because that is what lights a line in the first place, and
+ * the rule that thickens a lit line is written the same way — the same selector without it is
+ * outranked and never applies.
+ */
+.dm-canvas.focused #wires path.relationship.lit.inbound { stroke-width: 1; }
 /* Selected outranks hovered, and reads as the same colour one ring thicker. */
 .dm-node[aria-pressed='true'],
 .dm-node[aria-pressed='true']:hover {
