@@ -159,6 +159,18 @@ export function useWires(
    * somewhere, and a wire lit by its own ends had no line to light.
    */
   const leads = useRef(new Map<SVGPathElement, SVGPathElement>())
+  /**
+   * Light again, now that the lines have moved.
+   *
+   * Which path carries a wire is decided by measuring, and measuring happens in a
+   * `ResizeObserver` callback — after the effect below has already lit what it thought was there.
+   * On the first pass that map is empty and every wire resolves to nothing, so a selection drew no
+   * lines at all; on a later pass a path that had been lit can hand its line to another one. Both
+   * are the same fault: lighting has to happen after the measuring, not before it, so measuring
+   * asks for it rather than assuming it already happened. Only opacity and stroke width change, so
+   * this cannot bring the observer back round.
+   */
+  const relight = useRef(() => {})
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -267,6 +279,7 @@ export function useWires(
           lead.set(path, path)
         }
       }
+      relight.current()
     }
 
     // Fires on first paint, on resize, and again when the webfont lands and the cards reflow.
@@ -410,17 +423,19 @@ export function useWires(
         focus(wanted)
       })
     }
-    focus(pinned ?? hovered.current)
+    relight.current = () => focus(hovered.current ?? pinned)
+    focus(hovered.current ?? pinned)
 
-    // A pinned card outranks the pointer: hovering elsewhere leaves it alone.
+    // The pointer outranks the selection while it rests on a card, and hands it straight back when
+    // it moves off one: a selection that made every other card unreadable was answering a question
+    // nobody asked twice.
     const enter = (e: Event) => {
       hovered.current = (e.target as HTMLElement).closest<HTMLElement>('[data-node]')?.id ?? null
-      if (pinned) return
-      relight(hovered.current)
+      relight(hovered.current ?? pinned)
     }
     const leave = () => {
       hovered.current = null
-      if (!pinned) relight(null)
+      relight(pinned)
     }
     const click = (e: MouseEvent) => {
       const target = e.target as HTMLElement
@@ -451,6 +466,7 @@ export function useWires(
 
     return () => {
       cancelAnimationFrame(queued)
+      relight.current = () => {}
       canvas.removeEventListener('pointerover', enter)
       canvas.removeEventListener('focusin', enter)
       canvas.removeEventListener('pointerleave', leave)
