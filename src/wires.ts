@@ -170,7 +170,7 @@ export function useWires(
    * asks for it rather than assuming it already happened. Only opacity and stroke width change, so
    * this cannot bring the observer back round.
    */
-  const relight = useRef(() => {})
+  const lightAgain = useRef(() => {})
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -279,7 +279,7 @@ export function useWires(
           lead.set(path, path)
         }
       }
-      relight.current()
+      lightAgain.current()
     }
 
     // Fires on first paint, on resize, and again when the webfont lands and the cards reflow.
@@ -423,7 +423,7 @@ export function useWires(
         focus(wanted)
       })
     }
-    relight.current = () => focus(hovered.current ?? pinned)
+    lightAgain.current = () => focus(hovered.current ?? pinned)
     focus(hovered.current ?? pinned)
 
     // The pointer outranks the selection while it rests on a card, and hands it straight back when
@@ -466,7 +466,7 @@ export function useWires(
 
     return () => {
       cancelAnimationFrame(queued)
-      relight.current = () => {}
+      lightAgain.current = () => {}
       canvas.removeEventListener('pointerover', enter)
       canvas.removeEventListener('focusin', enter)
       canvas.removeEventListener('pointerleave', leave)
