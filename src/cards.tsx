@@ -193,7 +193,7 @@ export function MoreCard({
 /** A card that adds the thing this block holds. Never a wire endpoint either. */
 export function AddCard({ ctx, to, label }: { ctx: PluginContext; to: string; label: string }) {
   return (
-    <AppLink ctx={ctx} to={to} className="dm-node dm-add" title={label}>
+    <AppLink ctx={ctx} to={to} className="dm-node dm-add dm-new" title={label}>
       <Plus size={18} />
       <span>{label}</span>
     </AppLink>

@@ -401,6 +401,10 @@ button.dm-mark { cursor: pointer; }
    and every line, and never dimmed with them. */
 .dm-add, .dm-canvas.focused .dm-add { z-index: 4; opacity: 0.9; }
 .dm-add:hover, .dm-canvas.focused .dm-add:hover { opacity: 1; }
+/* The way to add one sits at the right edge, in the last column whatever the width — a fixed place
+   to reach for rather than a card that drifts with however many are on the page. `-2 / -1` is the
+   last column of the grid, which `auto-fill` re-counts on every resize. */
+.dm-new { grid-column: -2 / -1; }
 .dm-canvas.focused #wires path.lit { stroke-width: 2; }
 /* Selected outranks hovered, and reads as the same colour one ring thicker. */
 .dm-node[aria-pressed='true'],
