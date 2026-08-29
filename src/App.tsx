@@ -469,7 +469,6 @@ function Canvas({
   const shown = useMemo(() => {
     const page = marts.slice(0, limit)
     if (!pinned) return page
-    const on = new Set(page.map(mart => mart.id))
     const wanted = new Set(
       model.chains
         .filter(chain => chain.includes(pinned))
@@ -483,7 +482,17 @@ function Canvas({
       if (wire.from === pinned) wanted.add(wire.to.slice(3))
       if (wire.to === pinned) wanted.add(wire.from.slice(3))
     }
-    return [...page, ...model.marts.filter(mart => wanted.has(mart.id) && !on.has(mart.id))]
+    /**
+     * What the selection points at comes first, and the page fills what is left.
+     *
+     * Never more than a page either way. A storage sits on a chain with every data mart it holds,
+     * so asking for all of them put a thousand cards on the page at once — and a block that opens
+     * a thousand cards to explain one click is not showing a chain, it is dumping a list. The
+     * "load more" card says how many are still behind it, as it does for everything else.
+     */
+    const points = model.marts.filter(mart => wanted.has(mart.id))
+    const seen = new Set(points.map(mart => mart.id))
+    return [...points, ...page.filter(mart => !seen.has(mart.id))].slice(0, limit)
   }, [marts, limit, pinned, model.chains, model.wires, model.marts])
   // The selected report is on screen whatever the paging says, for the same reason its data mart is.
   const shownReports = useMemo(() => {
