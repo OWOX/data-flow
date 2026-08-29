@@ -490,9 +490,14 @@ function Canvas({
      * a thousand cards to explain one click is not showing a chain, it is dumping a list. The
      * "load more" card says how many are still behind it, as it does for everything else.
      */
-    const points = model.marts.filter(mart => wanted.has(mart.id))
+    const points = model.marts.filter(mart => wanted.has(mart.id)).slice(0, limit)
     const seen = new Set(points.map(mart => mart.id))
-    return [...points, ...page.filter(mart => !seen.has(mart.id))].slice(0, limit)
+    const filled = [...points, ...page.filter(mart => !seen.has(mart.id))].slice(0, limit)
+    // Which cards make the page is what the selection decides; the order they sit in is not its
+    // business. Choosing them first and then restoring the block's own order keeps a selected data
+    // mart where it was rather than sending it to the front of its block.
+    const rank = new Map(model.marts.map((mart, at) => [mart.id, at]))
+    return filled.sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0))
   }, [marts, limit, pinned, model.chains, model.wires, model.marts])
   // The selected report is on screen whatever the paging says, for the same reason its data mart is.
   const shownReports = useMemo(() => {

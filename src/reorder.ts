@@ -34,60 +34,65 @@ export function useReorder<T>(items: T[], idOf: (item: T) => string): Cards<T> {
    * wires still find it, and `getBoundingClientRect` reports the box it is scaled to, so its lines
    * follow it into the point rather than snapping away before it has left.
    */
+  /**
+   * What the list is doing between one set of cards and the next.
+   *
+   * `leaving` shrinks away and holds its cell until it has; `entering` grows out of a point;
+   * `turning` arrived into a cell another card has just vacated, and turns over in place instead —
+   * a replacement is one event, not a departure and an arrival stacked on each other.
+   */
   const [leaving, setLeaving] = useState<Array<{ item: T; at: number }>>([])
-  const shown = useRef<T[]>(items)
-  /**
-   * The timer that ends the collapse, held across renders rather than by the effect.
-   *
-   * Every caller passes `idOf` inline, so it is a new function each render and the effect re-runs
-   * every time — including the render `setLeaving` itself causes. An effect-scoped timer was
-   * cleaned up by that very re-run, and the re-run found nothing left to leave and scheduled no
-   * replacement, so the cards stayed collapsed and kept their cells forever.
-   */
-  const ending = useRef<ReturnType<typeof setTimeout>>(undefined)
-  /**
-   * Cards that have just joined the list.
-   *
-   * Not "cards that have just mounted": folding a block unmounts every card and unfolding mounts
-   * them all again, and none of them joined anything — the list never changed. Arrival is measured
-   * against the ids that were here before, so opening a block is silent and admitting one card
-   * through a filter animates one card.
-   *
-   * Measured in a layout effect so the class is on the element before the browser paints; an
-   * ordinary effect lands a frame late, and the card flashes at full size before it collapses to
-   * begin.
-   */
   const [entering, setEntering] = useState<Set<string>>(new Set())
-  const known = useRef(new Set(items.map(idOf)))
-  const beginning = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const [turning, setTurning] = useState<Set<string>>(new Set())
+  /**
+   * The cards that were here last time, and the timer that ends the transition.
+   *
+   * Both outlive the effect on purpose. Every caller passes `idOf` inline, so it is a new function
+   * each render and the effect re-runs on every one — including the renders these very `set` calls
+   * cause. An effect-scoped timer was cleaned up by that re-run, which then found nothing newly
+   * gone and scheduled no replacement, so the cards stayed collapsed and kept their cells for good.
+   */
+  const was = useRef<T[]>(items)
+  const settling = useRef<ReturnType<typeof setTimeout>>(undefined)
 
+  /**
+   * A layout effect, so the classes are on the elements before the browser paints. An ordinary one
+   * lands a frame late and a card flashes at full size before it collapses to begin.
+   *
+   * Arrival is measured against the ids that were here before rather than against mounting:
+   * folding a block unmounts every card and unfolding mounts them all again, and none of them
+   * joined anything.
+   */
   useLayoutEffect(() => {
+    const before = was.current
     const here = items.map(idOf)
-    const fresh = here.filter(id => !known.current.has(id))
-    known.current = new Set(here)
-    if (fresh.length === 0) return
-    setEntering(new Set(fresh))
-    clearTimeout(beginning.current)
-    beginning.current = setTimeout(() => setEntering(new Set()), LEAVING_MS)
+    const present = new Set(here)
+    was.current = items
+
+    const fresh = new Set(here.filter(id => !before.some(item => idOf(item) === id)))
+    const gone = before.map((item, at) => ({ item, at })).filter(({ item }) => !present.has(idOf(item)))
+    // A cell whose card left and whose index now holds a newly arrived one is a replacement.
+    const swapped = new Map(
+      gone
+        .map(({ item, at }) => [here[at], item] as const)
+        .filter(([taker]) => taker !== undefined && fresh.has(taker)),
+    )
+    const replaced = new Set([...swapped.values()].map(idOf))
+
+    if (fresh.size === 0 && gone.length === 0) return
+    setTurning(new Set(swapped.keys()))
+    setEntering(new Set([...fresh].filter(id => !swapped.has(id))))
+    setLeaving(gone.filter(({ item }) => !replaced.has(idOf(item))))
+    clearTimeout(settling.current)
+    settling.current = setTimeout(() => {
+      setTurning(new Set())
+      setEntering(new Set())
+      setLeaving([])
+    }, LEAVING_MS)
   }, [items, idOf])
 
-  useEffect(() => {
-    const here = new Set(items.map(idOf))
-    const gone = shown.current.map((item, at) => ({ item, at })).filter(({ item }) => !here.has(idOf(item)))
-    shown.current = items
-    if (gone.length === 0) return
-    setLeaving(gone)
-    clearTimeout(ending.current)
-    ending.current = setTimeout(() => setLeaving([]), LEAVING_MS)
-  }, [items, idOf])
+  useEffect(() => () => clearTimeout(settling.current), [])
 
-  useEffect(
-    () => () => {
-      clearTimeout(ending.current)
-      clearTimeout(beginning.current)
-    },
-    [],
-  )
   const [drop, setDrop] = useState<{ id: string; after: boolean } | null>(null)
   const dragged = useRef<string | null>(null)
 
@@ -127,7 +132,7 @@ export function useReorder<T>(items: T[], idOf: (item: T) => string): Cards<T> {
   const dragProps = (item: T): DragProps => {
     const id = idOf(item)
     const going = leaving.some(other => idOf(other.item) === id) ? 'dm-leaving' : ''
-    const arriving = entering.has(id) ? 'dm-entering' : ''
+    const arriving = entering.has(id) ? 'dm-entering' : turning.has(id) ? 'dm-turning' : ''
     const marker =
       dragged.current === id
         ? 'dm-dragging'
