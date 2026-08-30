@@ -1,6 +1,6 @@
 {
   "name": "Data Flow",
-  "description": "Where this project's data comes from and where it goes: sources, data marts, destinations and reports, and the lines between them.",
+  "description": "Where this project's data comes from and where it goes: sources, storages, data marts, destinations and reports, and the lines between them.",
   "delivery": {
     "type": "remote",
     "url": "https://owox.github.io/data-flow/"
