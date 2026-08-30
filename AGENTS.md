@@ -32,8 +32,7 @@ about the OWOX plugin contract.
 ## The canvas
 
 Five blocks in a column — Sources, Storages, Data Marts, Destinations, Reports — over one SVG
-layer. The layout began as a port of `owox.com/src/admin/model.astro` and has since diverged on
-purpose; the notes below are the contract now.
+layer. The notes below are the contract; nothing outside this repo defines it.
 
 - The wire layer sits above the block panels and below their titles (`#wires` is z-index 1, a
   block's head is 5), so a line crosses a block's background but never its name.

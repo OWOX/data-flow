@@ -1,8 +1,9 @@
 // The lines between the cards, and the highlight that reads them.
 //
-// Ported from owox.com's /admin/model canvas: an absolutely positioned SVG under the cards, one
-// bezier per wire, redrawn from the live element boxes whenever the grid reflows. Hovering a card
-// isolates it and its lines; clicking pins that state so the pointer can leave.
+// One absolutely positioned SVG over the block panels and under their titles, holding one bezier
+// per pair of boxes, redrawn from the live element boxes whenever the grid reflows. A chosen card
+// keeps its lines whatever the pointer does; the card under the pointer adds its own beside them,
+// faded. See AGENTS.md for the four invariants this file has to hold.
 import { useEffect, useRef, type RefObject } from 'react'
 import type { Wire } from './owox'
 
