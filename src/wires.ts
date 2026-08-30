@@ -171,6 +171,15 @@ export function useWires(
    * this cannot bring the observer back round.
    */
   const lightAgain = useRef(() => {})
+  /**
+   * The paths currently carrying the classes, so putting them out costs their own number.
+   *
+   * A ref rather than a local, because the effect that lights them re-runs whenever the selection
+   * changes — and a local would start that run empty, with no record of what the run before it had
+   * lit. Those paths kept their classes for good: choosing a second card drew its lines beside the
+   * first card's rather than instead of them, and unselecting left the last ones burning.
+   */
+  const alight = useRef<SVGPathElement[]>([])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -352,8 +361,7 @@ export function useWires(
       file(byId, to, path)
       file(byPair, pair(from, to), path)
     }
-    /** The paths currently carrying the classes, so putting them out costs their own number. */
-    let alight: SVGPathElement[] = []
+
 
     /**
      * Hover lighting only.
@@ -394,8 +402,8 @@ export function useWires(
         // thing its lines do and for the same reason.
         el.classList.toggle('aside', pinnedId !== null && el.id !== pinnedId)
       }
-      for (const path of alight) path.classList.remove('lit', 'aside')
-      alight = []
+      for (const path of alight.current) path.classList.remove('lit', 'aside')
+      alight.current = []
       const lead = leads.current
       // A thousand wires between the same two boxes light the one line that stands for them all.
       const on = new Set<SVGPathElement>()
@@ -407,7 +415,7 @@ export function useWires(
           on.add(line)
           line.classList.add('lit')
           if (faded) line.classList.add('aside')
-          alight.push(line)
+          alight.current.push(line)
         }
         for (const key of links) {
           for (const path of byPair.get(key) ?? []) {
@@ -417,7 +425,7 @@ export function useWires(
             on.add(line)
             line.classList.add('lit')
             if (faded) line.classList.add('aside')
-            alight.push(line)
+            alight.current.push(line)
           }
         }
       }
