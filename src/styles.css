@@ -53,7 +53,7 @@ body { margin: 0; color: var(--foreground); }
 /* The lines start hidden: a canvas of hundreds of cards is unreadable with every route drawn at
    once. Hovering a card draws its own, clicking keeps them drawn. */
 #wires path {
-  fill: none; stroke-linecap: round; stroke-width: 1.5;
+  fill: none; stroke-linecap: round; stroke-width: 2;
   opacity: 0; transition: opacity 150ms;
   pointer-events: stroke;
 }
@@ -457,31 +457,21 @@ button.dm-mark { cursor: pointer; }
    to reach for rather than a card that drifts with however many are on the page. `-2 / -1` is the
    last column of the grid, which `auto-fill` re-counts on every resize. */
 .dm-new { grid-column: -2 / -1; }
-.dm-canvas.focused #wires path.lit { stroke-width: 2; }
-/*
- * Direction, but only where direction is the whole of what a line says.
- *
- * A relationship is a join between two data marts, and which way it points is its meaning — so one
- * arriving at the card in hand is drawn thin against the ones leaving it. Every other line crosses
- * from one block to the next, where the blocks themselves already say which way it goes, and stays
- * at full weight in both directions.
- *
- * Written against `.dm-canvas.focused` because that is what lights a line in the first place, and
- * the rule that thickens a lit line is written the same way — the same selector without it is
- * outranked and never applies.
- */
-.dm-canvas.focused #wires path.relationship.lit.inbound { stroke-width: 1; }
-/* Selected outranks hovered, and reads as the same colour one ring thicker. */
+/* A line is one weight and one colour wherever it is and whatever is chosen — width said "lit",
+   and a thin relationship said "arriving", and neither is something a reader should have to
+   measure. Transparency is the only thing that varies now, and it says one thing: not the card you
+   picked. Relationships included. */
+/* Selected reads as hovered does: the same colour, the same ring. What tells them apart is that
+   everything else has stepped back, not that this one has grown. */
 .dm-node[aria-pressed='true'],
 .dm-node[aria-pressed='true']:hover {
   border-color: var(--tone);
-  box-shadow: 0 0 0 2px var(--tone);
+  box-shadow: 0 0 0 1px var(--tone);
 }
-/* A card with nothing to report still has to look chosen, so blue stays the mark of a selection
-   wherever a status has not claimed the border. */
-.dm-node[data-tone='idle'][aria-pressed='true'],
-.dm-node[data-tone='idle'][aria-pressed='true']:hover,
-.dm-node:not([data-tone])[aria-pressed='true'],
-.dm-node:not([data-tone])[aria-pressed='true']:hover {
-  --tone: var(--primary);
+/* The card under the pointer while a different one is chosen: its own colour, at half strength.
+   Written with `.lit` and `:hover` so it outranks the ring rule above rather than racing it, and
+   `--tone` is used here rather than redefined — a variable cannot be set from itself. */
+.dm-node.lit.aside:hover {
+  border-color: color-mix(in oklab, var(--tone) 50%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--tone) 50%, transparent);
 }

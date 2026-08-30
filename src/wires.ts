@@ -256,7 +256,7 @@ export function useWires(
       /** Nothing to draw any more, so nothing left lit either. */
       const blank = (path: SVGPathElement) => {
         path.removeAttribute('d')
-        path.classList.remove('lit', 'outbound', 'inbound')
+        path.classList.remove('lit', 'aside')
       }
       for (const path of paths) {
         const a = at(path.dataset.from)
@@ -390,21 +390,22 @@ export function useWires(
           ([prefix, standIn]) => standIn === el && missing.some(node => node.startsWith(prefix)),
         )
         el.classList.toggle('lit', lit.has(el.id) || standsFor)
+        // Not the card that was picked, while one was: its ring reads at half strength, the same
+        // thing its lines do and for the same reason.
+        el.classList.toggle('aside', pinnedId !== null && el.id !== pinnedId)
       }
-      for (const path of alight) path.classList.remove('lit', 'outbound', 'inbound', 'aside')
+      for (const path of alight) path.classList.remove('lit', 'aside')
       alight = []
       const lead = leads.current
       // A thousand wires between the same two boxes light the one line that stands for them all.
       const on = new Set<SVGPathElement>()
       const paint = (id: string | null, links: Set<string>, faded: boolean) => {
         if (id === null) return
-        // Direction is read from the card in hand: a line that leaves it is solid, one that
-        // arrives at it is dashed. A line lit through a chain touches neither end, stays solid.
         for (const path of byId.get(id) ?? []) {
           const line = lead.get(path)
           if (!line || on.has(line)) continue
           on.add(line)
-          line.classList.add('lit', path.dataset.from === id ? 'outbound' : 'inbound')
+          line.classList.add('lit')
           if (faded) line.classList.add('aside')
           alight.push(line)
         }
