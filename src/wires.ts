@@ -266,7 +266,7 @@ export function useWires(
       /** Nothing to draw any more, so nothing left lit either. */
       const blank = (path: SVGPathElement) => {
         path.removeAttribute('d')
-        path.classList.remove('lit', 'aside')
+        path.classList.remove('lit', 'aside', 'outbound', 'inbound')
       }
       for (const path of paths) {
         const a = at(path.dataset.from)
@@ -403,18 +403,20 @@ export function useWires(
         // thing its lines do and for the same reason.
         el.classList.toggle('aside', pinnedId !== null && el.id !== pinnedId)
       }
-      for (const path of alight.current) path.classList.remove('lit', 'aside')
+      for (const path of alight.current) path.classList.remove('lit', 'aside', 'outbound', 'inbound')
       alight.current = []
       const lead = leads.current
       // A thousand wires between the same two boxes light the one line that stands for them all.
       const on = new Set<SVGPathElement>()
       const paint = (id: string | null, links: Set<string>, faded: boolean) => {
         if (id === null) return
+        // Direction, read from the card in hand: a line leaving it against one arriving at it.
+        // Only a relationship draws on this — see the note beside the rule in styles.css.
         for (const path of byId.get(id) ?? []) {
           const line = lead.get(path)
           if (!line || on.has(line)) continue
           on.add(line)
-          line.classList.add('lit')
+          line.classList.add('lit', path.dataset.from === id ? 'outbound' : 'inbound')
           if (faded) line.classList.add('aside')
           alight.current.push(line)
         }

@@ -457,10 +457,19 @@ button.dm-mark { cursor: pointer; }
    to reach for rather than a card that drifts with however many are on the page. `-2 / -1` is the
    last column of the grid, which `auto-fill` re-counts on every resize. */
 .dm-new { grid-column: -2 / -1; }
-/* A line is one weight and one colour wherever it is and whatever is chosen — width said "lit",
-   and a thin relationship said "arriving", and neither is something a reader should have to
-   measure. Transparency is the only thing that varies now, and it says one thing: not the card you
-   picked. Relationships included. */
+/*
+ * Direction, but only where direction is the whole of what a line says.
+ *
+ * A relationship is a join between two data marts, and which way it points is its meaning: a mart
+ * that reads from four others looks nothing like one four others read from, and on a canvas where
+ * both ends sit in the same block there is no other way to tell them apart. So one arriving at the
+ * card in hand is drawn thin against the ones leaving it.
+ *
+ * Every other line crosses from one block to the next, where the blocks themselves already say
+ * which way it goes, and stays at one weight in both directions. A line lit through a chain
+ * touches neither end and keeps that weight too.
+ */
+#wires path.relationship.inbound { stroke-width: 1; }
 /* Selected reads as hovered does: the same colour, the same ring. What tells them apart is that
    everything else has stepped back, not that this one has grown. */
 .dm-node[aria-pressed='true'],

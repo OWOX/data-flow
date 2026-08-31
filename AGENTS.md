@@ -39,9 +39,14 @@ layer. The notes below are the contract; nothing outside this repo defines it.
 - An end that is not on the page resolves to something that is: the block that would have held it
   when the card is one this member cannot see, or the block's own "Load 25 more" card when it is
   simply past the page limit. A line is never dropped for want of an endpoint.
-- A line is one weight and one colour in every state. Only opacity varies, and it says one thing:
-  faded means "not the card you picked". Blue crosses a block boundary, grey stays inside the Data
-  Marts block as a join between two marts — so colour must not be reused to mean anything else.
+- A line is one colour in every state, and one weight with a single exception. Opacity says one
+  thing — faded means "not the card you picked" — and colour says what a line is: blue crosses a
+  block boundary, grey stays inside the Data Marts block as a join between two marts. Neither may
+  be reused to mean anything else.
+- The exception is weight, and only for a relationship: one arriving at the card in hand is 1px
+  against 2px for one leaving it. Both its ends are in the same block, so nothing else on the
+  canvas says which way a join points. Every other line crosses blocks, where the blocks already
+  say it, and stays at 2px both ways.
 - Selecting is not hovering. A chosen card keeps its lines whatever the pointer does; the card
   under the pointer adds its own beside them, faded. Hovering with nothing chosen is not faded.
 
