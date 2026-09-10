@@ -1,6 +1,8 @@
 // Storage, destination and definition-type marks, vendored verbatim from
 // owox-data-marts/apps/web/src/shared/icons so the canvas shows the same glyphs the host does.
-// Self-contained SVG components — no imports, nothing to keep in sync but the files themselves.
+// Self-contained SVG components — nothing to keep in sync but the files themselves. The Excel one
+// alone imports `useId`: it namespaces its gradient ids per instance, so rendering it on a card and
+// in the type filter at once does not put two identical <defs> ids into the document.
 import { Asterisk, Code, Grip, Plug, Table } from 'lucide-react'
 import { AwsAthenaIcon } from './aws-athena-icon'
 import { AwsRedshiftIcon } from './aws-redshift-icon'
@@ -14,6 +16,7 @@ import { GoogleBigQueryIcon } from './google-bigquery-icon'
 import { GoogleChatIcon } from './google-chat-icon'
 import { GoogleSheetsIcon } from './google-sheets-icon'
 import { LegacyGoogleBigQueryIcon } from './legacy-google-bigquery-icon'
+import { MicrosoftExcelIcon } from './microsoft-excel-icon'
 import { MicrosoftTeamsIcon } from './microsoft-teams-icon'
 import { ODataIcon } from './odata-icon'
 import { SlackIcon } from './slack-icon'
@@ -35,6 +38,7 @@ export const STORAGE: Record<string, { icon: Mark; label: string }> = {
 export const DESTINATION: Record<string, { icon: Mark; label: string }> = {
   GOOGLE_SHEETS: { icon: GoogleSheetsIcon, label: 'Google Sheets' },
   LOOKER_STUDIO: { icon: DataStudioIcon, label: 'Data Studio' },
+  EXCEL: { icon: MicrosoftExcelIcon, label: 'Microsoft Excel' },
   EMAIL: { icon: EmailIcon, label: 'Email' },
   SLACK: { icon: SlackIcon, label: 'Slack' },
   MS_TEAMS: { icon: MicrosoftTeamsIcon, label: 'Microsoft Teams' },
