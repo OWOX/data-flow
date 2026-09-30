@@ -6,11 +6,11 @@ import {
   ChevronDown,
   ExternalLink,
   History,
+  Link2,
   Loader2,
   Plus,
   Share2,
   Users,
-  Waypoints,
   XCircle,
 } from 'lucide-react'
 import type { PluginContext } from '@owox/plugin-sdk'
@@ -173,7 +173,7 @@ export function MartCard({
           )}
           {mart.outbound > 0 && (
             <span className="dm-badge dm-badge-shrink" title={count(mart.outbound, 'relationship')}>
-              <Waypoints size={12} /> {count(mart.outbound, 'relationship')}
+              <Link2 size={12} /> {count(mart.outbound, 'relationship')}
             </span>
           )}
           {mart.draft && <span className="dm-badge dm-badge-draft">draft</span>}
