@@ -210,10 +210,11 @@ export function MartCard({
 /**
  * A mart's contexts on one line, each under the icon picked for it.
  *
- * Named while the names fit; once they would spill, icons alone, each name kept in its title. Whether
- * they fit is read off an invisible named copy laid beside the row, so the answer never depends on
- * which of the two forms happens to be drawn: it is judged before the browser paints, and again
- * whenever the row changes width or the contexts change.
+ * Named while the names fit. Once they would spill, they fold into one chip, a count beside the
+ * context icon, whose bubble names them all; a lone context folds to its icon alone. Whether they
+ * fit is read off an invisible named copy laid beside the row, so the answer never depends on which
+ * form happens to be drawn: it is judged before the browser paints, and again whenever the row
+ * changes width or the contexts change.
  */
 function Contexts({ contexts }: { contexts: Mart['contexts'] }) {
   const row = useRef<HTMLSpanElement>(null)
@@ -231,19 +232,43 @@ function Contexts({ contexts }: { contexts: Mart['contexts'] }) {
     return () => watch.disconnect()
   }, [shown, contexts])
   if (!shown) return null
-  const chips = (withNames: boolean) =>
-    contexts.map(context => (
-      <span key={context.id} className="dm-badge" title={`Context: ${context.name}`}>
-        <PickedIcon icon={context.icon} fallback={DEFAULT_CONTEXT_ICON} size={12} />
-        {withNames && ` ${context.name}`}
-      </span>
-    ))
+  const chip = (context: Mart['contexts'][number]) => (
+    <span key={context.id} className="dm-badge" title={`Context: ${context.name}`}>
+      <PickedIcon icon={context.icon} fallback={DEFAULT_CONTEXT_ICON} size={12} /> {context.name}
+    </span>
+  )
+  // The folded chip wears the icon they all share, and the plain context icon when they differ.
+  const shared = contexts.every(context => context.icon === contexts[0].icon) ? contexts[0].icon : undefined
+  const names = contexts.map(context => context.name)
   return (
     <span ref={row} className={`dm-contexts${bare ? ' dm-contexts-bare' : ''}`}>
-      <span ref={named} className="dm-contexts-measure" aria-hidden>
-        {chips(true)}
+      <span className="dm-contexts-probe" aria-hidden>
+        <span ref={named} className="dm-contexts-measure">
+          {contexts.map(chip)}
+        </span>
       </span>
-      {chips(!bare)}
+      {bare ? (
+        <span
+          className="dm-badge dm-mark dm-contexts-count"
+          tabIndex={0}
+          role="note"
+          aria-label={`${count(contexts.length, 'context')}: ${names.join(', ')}`}
+        >
+          {contexts.length > 1 && num(contexts.length)}
+          <PickedIcon icon={shared} fallback={DEFAULT_CONTEXT_ICON} size={12} />
+          <span className="dm-hint-body dm-mark-body">
+            <span>{count(contexts.length, 'context')}</span>
+            {contexts.map(context => (
+              <span key={context.id} className="dm-contexts-line">
+                <PickedIcon icon={context.icon} fallback={DEFAULT_CONTEXT_ICON} size={12} />
+                {context.name}
+              </span>
+            ))}
+          </span>
+        </span>
+      ) : (
+        contexts.map(chip)
+      )}
     </span>
   )
 }
