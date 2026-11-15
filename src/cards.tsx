@@ -14,8 +14,9 @@ import {
   XCircle,
 } from 'lucide-react'
 import type { PluginContext } from '@owox/plugin-sdk'
-import { useLayoutEffect, useRef } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { KIND, type Mark } from './icons'
+import { DEFAULT_CONTEXT_ICON, PickedIcon } from './icons/picked'
 import {
   count,
   freshnessLines,
@@ -152,6 +153,8 @@ export function MartCard({
       ctx={ctx}
       id={martId(mart.id)}
       tone={tone}
+      // Only an icon someone picked: the default box on every card would say nothing.
+      mark={<PickedIcon icon={mart.icon} wrap="dm-logo" />}
       title={mart.title}
       link={`/ui/${ctx.projectId}/data-marts/${mart.id}`}
       linkTitle="Open this data mart"
@@ -196,6 +199,7 @@ export function MartCard({
             <History size={14} />
           </Mark>
         )}
+        <Contexts contexts={mart.contexts} />
         {/* What the project may do with it, and whose it is, beside what the project knows about it. */}
         <Shared what={sharing} />
         <People people={mart.people} />
@@ -203,6 +207,47 @@ export function MartCard({
     </NodeCard>
   )
 }
+/**
+ * A mart's contexts on one line, each under the icon picked for it.
+ *
+ * Named while the names fit; once they would spill, icons alone, each name kept in its title. Whether
+ * they fit is read off an invisible named copy laid beside the row, so the answer never depends on
+ * which of the two forms happens to be drawn: it is judged before the browser paints, and again
+ * whenever the row changes width or the contexts change.
+ */
+function Contexts({ contexts }: { contexts: Mart['contexts'] }) {
+  const row = useRef<HTMLSpanElement>(null)
+  const named = useRef<HTMLSpanElement>(null)
+  const [bare, setBare] = useState(false)
+  const shown = contexts.length > 0
+  useLayoutEffect(() => {
+    const el = row.current
+    const copy = named.current
+    if (!el || !copy) return
+    const judge = () => setBare(copy.offsetWidth > el.clientWidth)
+    judge()
+    const watch = new ResizeObserver(judge)
+    watch.observe(el)
+    return () => watch.disconnect()
+  }, [shown, contexts])
+  if (!shown) return null
+  const chips = (withNames: boolean) =>
+    contexts.map(context => (
+      <span key={context.id} className="dm-badge" title={`Context: ${context.name}`}>
+        <PickedIcon icon={context.icon} fallback={DEFAULT_CONTEXT_ICON} size={12} />
+        {withNames && ` ${context.name}`}
+      </span>
+    ))
+  return (
+    <span ref={row} className={`dm-contexts${bare ? ' dm-contexts-bare' : ''}`}>
+      <span ref={named} className="dm-contexts-measure" aria-hidden>
+        {chips(true)}
+      </span>
+      {chips(!bare)}
+    </span>
+  )
+}
+
 export function MoreCard({
   shown,
   total,

@@ -120,7 +120,17 @@ export type Mart = {
   reports: number
   errors: boolean
   people: Party[]
+  /** The icon picked for it in OWOX: a recommended key or `lucide:<name>`. Absent draws no icon at all. */
+  icon?: string
+  /** The contexts it belongs to, each with its own picked icon. */
+  contexts: Topic[]
 }
+
+/** A context as the mart list names it. */
+export type Topic = { id: string; name: string; icon?: string }
+
+/** `icon` and a context's `icon` are newer than the typed client, so they are read loosely. */
+type RawLabels = { icon?: string | null; contexts?: Array<{ id?: string; name?: string; icon?: string | null }> }
 
 /**
  * Someone a thing records: who made it, or who owns it.
@@ -614,6 +624,11 @@ export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) =
         sharedForReporting: m.availableForReporting === true,
         sharedForMaintenance: m.availableForMaintenance === true,
         people: owners(m),
+        icon: (m as RawLabels).icon ?? undefined,
+        // Read from the list payload, so a shape it does not expect costs the chips, never the page.
+        contexts: (Array.isArray((m as RawLabels).contexts) ? (m as RawLabels).contexts! : [])
+          .filter(c => c.id && c.name)
+          .map(c => ({ id: c.id!, name: c.name!, icon: c.icon ?? undefined })),
         inbound: inbound.get(m.id) ?? 0,
         outbound: outbound.get(m.id) ?? 0,
         reports: reportsPerMart.get(m.id) ?? 0,

@@ -6,7 +6,7 @@ import { loadModel, qualityTone, recent, tone, worst } from './owox.ts'
 import { reach } from './wires.ts'
 
 const marts = [
-  { id: 'm1', title: 'Facebook ads', status: 'PUBLISHED', definitionType: 'CONNECTOR', connectorSourceName: 'FacebookAds', storage: { title: 'BigQuery', type: 'GOOGLE_BIGQUERY' }, availableForReporting: true, createdByUser: { userId: 'u1', fullName: 'Ada Lovelace', avatar: 'https://x/a.png' }, technicalOwnerUsers: [{ userId: 'u2', email: 'grace@example.com' }], businessOwnerUsers: [], dataLastUpdated: { dataLastUpdatedAt: '2026-08-01T00:00:00Z', coverage: 'complete' } },
+  { id: 'm1', title: 'Facebook ads', status: 'PUBLISHED', definitionType: 'CONNECTOR', connectorSourceName: 'FacebookAds', storage: { title: 'BigQuery', type: 'GOOGLE_BIGQUERY' }, availableForReporting: true, createdByUser: { userId: 'u1', fullName: 'Ada Lovelace', avatar: 'https://x/a.png' }, technicalOwnerUsers: [{ userId: 'u2', email: 'grace@example.com' }], businessOwnerUsers: [], icon: 'lucide:rocket', contexts: [{ id: 'c1', name: 'Marketing', icon: 'campaigns' }, { id: 'c2', name: 'Finance', icon: null }], dataLastUpdated: { dataLastUpdatedAt: '2026-08-01T00:00:00Z', coverage: 'complete' } },
   { id: 'm2', title: 'Facebook spend', status: 'DRAFT', definitionType: 'CONNECTOR', connectorSourceName: 'FacebookAds', storage: { title: 'BigQuery', type: 'GOOGLE_BIGQUERY' } },
   { id: 'm3', title: 'Blend', status: 'PUBLISHED', definitionType: 'SQL', storage: { title: 'Athena', type: 'AWS_ATHENA' } },
 ]
@@ -89,6 +89,14 @@ test('the whole graph: cards, order, badges and lines', async () => {
   // Published before draft, connector before the rest, then most-joined-into first.
   assert.deepEqual(model.marts.map(m => m.id), ['m1', 'm3', 'm2'])
   assert.equal(model.marts[0].fields, 42)
+  // Picked icons ride along; none picked is undefined, which draws the host's default.
+  assert.equal(model.marts[0].icon, 'lucide:rocket')
+  assert.deepEqual(model.marts[0].contexts, [
+    { id: 'c1', name: 'Marketing', icon: 'campaigns' },
+    { id: 'c2', name: 'Finance', icon: undefined },
+  ])
+  assert.equal(model.marts[2].icon, undefined)
+  assert.deepEqual(model.marts[2].contexts, [])
   assert.equal(model.marts[0].inbound, 1)
   assert.equal(model.marts[0].reports, 2)
   // PASSED quality, but a report that last ran with an error still marks the mart.

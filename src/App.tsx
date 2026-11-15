@@ -19,6 +19,7 @@ import { AddCard, Logo, MartCard, MoreCard, NodeCard, People, RunIcon, Shared, t
 import { ago, count, reportName, scheduleLabel, sharedFor } from './format'
 import { Block, MultiSelect, SearchBox } from './controls'
 import { DESTINATION, EXIT, STORAGE, type Mark } from './icons'
+import { DEFAULT_CONTEXT_ICON, PickedIcon } from './icons/picked'
 import {
   destId,
   loadModel,
@@ -60,7 +61,7 @@ const PAGE = 25
  * with nothing ticked asks for nothing and gets nothing. Three tables follow this shape, so the
  * rule is written once and handed each of them.
  */
-type Flag<T> = { key: string; facet: string; label: string; test: (item: T) => boolean }
+type Flag<T> = { key: string; facet: string; label: string; test: (item: T) => boolean; icon?: Mark }
 
 const facetFilter = <T,>(flags: Array<Flag<T>>) => {
   const facets = [...new Set(flags.map(flag => flag.facet))]
@@ -68,6 +69,28 @@ const facetFilter = <T,>(flags: Array<Flag<T>>) => {
     const picked = flags.filter(flag => chosen.includes(flag.key))
     return (item: T) => facets.every(facet => picked.some(flag => flag.facet === facet && flag.test(item)))
   }
+}
+
+/**
+ * One option per context the visible marts belong to, plus one for the marts in none — without it,
+ * a filter with every box ticked would still hide them. Nothing at all when no mart has a context:
+ * a facet whose only option is "Without context" asks nothing.
+ */
+function contextFlags(marts: Mart[]): Array<Flag<Mart>> {
+  const seen = new Map<string, Mart['contexts'][number]>()
+  for (const mart of marts) for (const context of mart.contexts) seen.set(context.id, context)
+  if (seen.size === 0) return []
+  const flags: Array<Flag<Mart>> = [...seen.values()]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map(context => ({
+      key: `ctx:${context.id}`,
+      facet: 'contexts',
+      label: context.name,
+      test: m => m.contexts.some(c => c.id === context.id),
+      icon: ({ size }) => <PickedIcon icon={context.icon} fallback={DEFAULT_CONTEXT_ICON} size={size} />,
+    }))
+  flags.push({ key: 'ctx:none', facet: 'contexts', label: 'Without context', test: m => m.contexts.length === 0 })
+  return flags
 }
 
 const FLAGS: Array<Flag<Mart>> = [
@@ -183,6 +206,18 @@ function useSifted<T>(flags: Array<Flag<T>>, sift: (chosen: string[]) => (item: 
   const [search, setSearch] = useState('')
   const [chosen, setChosen] = useState(() => flags.map(flag => flag.key))
   const [limit, setLimit] = useState(PAGE)
+  /**
+   * Options that arrive after the first render start ticked, like the ones that were there from the
+   * start: the marts' contexts are only known once the project has been read.
+   */
+  const [known, setKnown] = useState(() => new Set(flags.map(flag => flag.key)))
+  // Ticked during the render they appear in, which React redoes before committing anything: left
+  // to an effect, a new context's marts would fail the filter for one painted frame and blink.
+  const fresh = flags.map(flag => flag.key).filter(key => !known.has(key))
+  if (fresh.length > 0) {
+    setKnown(new Set([...known, ...fresh]))
+    setChosen([...chosen, ...fresh])
+  }
   const matches = useMemo(() => sift(chosen), [sift, chosen])
   const restart = useCallback(() => setLimit(PAGE), [])
   return {
@@ -207,13 +242,13 @@ function useSifted<T>(flags: Array<Flag<T>>, sift: (chosen: string[]) => (item: 
 }
 type Sifted<T> = ReturnType<typeof useSifted<T>>
 
-const martPasses = facetFilter(FLAGS)
 const storagePasses = facetFilter(STORAGE_FLAGS)
 const reportPasses = facetFilter(REPORT_FLAGS)
 
 /** Everything the four blocks read. Canvas works it out; each block takes the whole thing. */
 type Page = {
   ctx: PluginContext
+  martFlags: Array<Flag<Mart>>
   model: Model
   sourceCards: Cards<Source>
   storages: Storage[]
@@ -374,7 +409,10 @@ function Canvas({
   const [pinned, setPinned] = useState<string | null>(null)
   // Filters start with everything ticked rather than empty: an empty menu now means "none", which
   // is what unticking "Select all" asks for.
-  const martFilter = useSifted(FLAGS, martPasses)
+  // Contexts come first, before relationships: they are what a mart is about, the rest is how it is wired.
+  const martFlags = useMemo(() => [...contextFlags(model.marts), ...FLAGS], [model.marts])
+  const martPasses = useMemo(() => facetFilter(martFlags), [martFlags])
+  const martFilter = useSifted(martFlags, martPasses)
   const [storageTypes, setStorageTypes] = useState<string[]>([])
   const [storageFlags, setStorageFlags] = useState(() => STORAGE_FLAGS.map(flag => flag.key))
   /**
@@ -611,6 +649,7 @@ function Canvas({
     marts,
     martCards,
     martFilter,
+    martFlags,
     destinations,
     destinationCards,
     exitCards,
@@ -795,7 +834,7 @@ function StoragesBlock({
   )
 }
 
-function DataMartsBlock({ state, ctx, marts, martCards, martFilter, onRecheck, checking, pending, band, storageScopeTitle }: Page) {
+function DataMartsBlock({ state, ctx, marts, martCards, martFilter, martFlags, onRecheck, checking, pending, band, storageScopeTitle }: Page) {
   return (
     <Block
       {...band('marts')}
@@ -809,7 +848,7 @@ function DataMartsBlock({ state, ctx, marts, martCards, martFilter, onRecheck, c
           <SearchBox value={martFilter.search} onChange={martFilter.onSearch} label="Search data marts" />
           <MultiSelect
             label="Filter"
-            options={FLAGS.map(flag => ({ value: flag.key, label: flag.label, group: flag.facet }))}
+            options={martFlags.map(flag => ({ value: flag.key, label: flag.label, group: flag.facet, icon: flag.icon }))}
             selected={martFilter.chosen}
             onChange={martFilter.onChoose}
           />

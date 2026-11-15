@@ -26,6 +26,11 @@ about the OWOX plugin contract.
   `createdByUser` on all four, `ownerUsers` on storages, destinations and reports, and
   `businessOwnerUsers`/`technicalOwnerUsers` on data marts. Only `userId` is guaranteed, so a name
   falls back to the email and a face to initials.
+- A data mart's picked `icon` and its `contexts` (each with its own `icon`) come from the same mart
+  list, so they cost no request either. An icon is a recommended key or `lucide:<name>`; the full
+  lucide set is a lazy chunk (`src/icons/catalog.ts`) loaded only when such a value is on screen.
+- Custom connectors cannot be read: `/api/connectors/custom` refuses plugin tokens outright, so a
+  custom source shows initials, no builder link, and one card per connector name.
 - No persistent storage: `plugin.json` declares no `collections`, and the sandbox has no
   localStorage/IndexedDB/cookies. State lives in memory for the session only.
 

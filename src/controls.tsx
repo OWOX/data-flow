@@ -133,9 +133,12 @@ export function MultiSelect({
   onChange: (next: string[]) => void
 }) {
   if (options.length === 0) return null
-  const all = selected.length === options.length
+  // Counted against the options on offer: a ticked option that has since gone (a context no mart
+  // is in any more) is no reason to say "3" where every box in the menu is ticked.
+  const ticked = options.filter(option => selected.includes(option.value)).length
+  const all = ticked === options.length
   // An empty menu asks for nothing, and says so.
-  const summary = all ? 'All' : selected.length === 0 ? 'None' : selected.length
+  const summary = all ? 'All' : ticked === 0 ? 'None' : ticked
   const groupOf = (value: string) => options.find(option => option.value === value)?.group
 
   // "only" narrows within a facet and leaves the others alone; in a menu with no facets, that is
