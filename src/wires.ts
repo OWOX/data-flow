@@ -302,6 +302,12 @@ export function useWires(
      * `getBoundingClientRect` reports the transformed box, so a line drawn mid-animation ends at
      * the point the card is scaled to — right while it moves, wrong once it stops. One pass after
      * the last card settles, folded into a frame so twenty-five endings cost one.
+     *
+     * A cut-short animation counts as settling too. `useReorder` takes the class off on a timer as
+     * long as the turn itself, so the turn is often cancelled rather than ended, and only
+     * `animationcancel` fires. Listening for `animationend` alone left a line measured on the
+     * turn's first frame, where perspective lifts the card's top edge above where it comes to rest:
+     * the line stopped short of the card.
      */
     let queued = false
     const settle = () => {
@@ -313,12 +319,14 @@ export function useWires(
       })
     }
     canvas.addEventListener('animationend', settle)
+    canvas.addEventListener('animationcancel', settle)
 
     // A whole block can be one end of a wire, so it lights like a card — but it is not one, and
     // the click handler still only ever selects `[data-node]`.
     return () => {
       observer.disconnect()
       canvas.removeEventListener('animationend', settle)
+      canvas.removeEventListener('animationcancel', settle)
       for (const path of paths) path.remove()
     }
   }, [canvasRef, wires, revision])
