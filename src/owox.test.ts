@@ -2,7 +2,7 @@
 // lines connect them. Run with `npm test` — node strips the types, so this needs no test framework.
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { customLogo, loadModel, qualityTone, recent, serviceKey, tone, worst } from './owox.ts'
+import { connectorLogo, loadModel, qualityTone, recent, serviceKey, tone, worst } from './owox.ts'
 import { reach } from './wires.ts'
 
 const marts = [
@@ -337,13 +337,14 @@ test('serviceKey names the service behind a set of API hosts', () => {
   assert.equal(serviceKey(['oauth2.example.com'], 'Fibery'), 'Fibery')
 })
 
-test('a custom logo must be an inline image', () => {
-  assert.equal(customLogo('data:image/png;base64,AAA'), 'data:image/png;base64,AAA')
-  assert.equal(customLogo('DATA:IMAGE/SVG+XML;BASE64,AAA'), 'DATA:IMAGE/SVG+XML;BASE64,AAA')
-  assert.equal(customLogo('https://x/logo.png'), undefined)
-  assert.equal(customLogo('data:text/html;base64,AAA'), undefined)
-  assert.equal(customLogo('data:image/svg+xml,<svg/>'), undefined)
-  assert.equal(customLogo(null), undefined)
+test('a connector logo must be an inline image', () => {
+  assert.equal(connectorLogo('data:image/png;base64,AAA'), 'data:image/png;base64,AAA')
+  assert.equal(connectorLogo('DATA:IMAGE/SVG+XML;BASE64,AAA'), 'DATA:IMAGE/SVG+XML;BASE64,AAA')
+  assert.equal(connectorLogo('https://x/logo.png'), undefined)
+  assert.equal(connectorLogo('data:text/html;base64,AAA'), undefined)
+  assert.equal(connectorLogo('data:image/svg+xml,<svg/>'), undefined)
+  assert.equal(connectorLogo(null), undefined)
+  assert.equal(connectorLogo('data:image/png;base64,'), undefined)
 })
 
 const customMarts = [
@@ -414,7 +415,7 @@ test('no summaries leaves one card per connector name, with initials', async () 
 
 test('a refused summaries call keeps the bundled connectors', async () => {
   const model = await loadModel(
-    customCtx(new Error('403'), [], [{ name: 'Other', title: 'Other Title', logo: 'https://x/o.png' }]),
+    customCtx(new Error('403'), [], [{ name: 'Other', title: 'Other Title', logo: 'data:image/png;base64,T0s=' }]),
   )
   // The refused call costs only the custom detail: each custom mart falls back to its connector name.
   assert.equal(model.sources.length, 3)
@@ -424,7 +425,7 @@ test('a refused summaries call keeps the bundled connectors', async () => {
         path === '/api/data-marts'
           ? { items: marts, total: marts.length, nextOffset: null }
           : path === '/api/connectors'
-            ? [{ name: 'FacebookAds', title: 'Facebook Ads', logo: 'https://x/fb.png' }]
+            ? [{ name: 'FacebookAds', title: 'Facebook Ads', logo: 'data:image/png;base64,RkI=' }]
             : path === '/api/connectors/custom/summaries'
               ? Promise.reject(new Error('404'))
               : path === '/api/data-marts/scheduled-triggers'
@@ -434,7 +435,7 @@ test('a refused summaries call keeps the bundled connectors', async () => {
   )
   const fb = withBundled.sources.find(s => s.key === 'FacebookAds')
   assert.equal(fb?.name, 'Facebook Ads')
-  assert.equal(fb?.logo, 'https://x/fb.png')
+  assert.equal(fb?.logo, 'data:image/png;base64,RkI=')
 })
 
 test('two spellings of one custom connector are one member', async () => {
@@ -492,4 +493,22 @@ test('without the bundled list no name is asked about as custom', async () => {
   const model = await loadModel(customCtx(summaries, requested, new Error('403')))
   assert.equal(requested.length, 0)
   assert.equal(model.sources.length, 3)
+})
+
+test('a bundled logo follows the same inline-image rule, and a nameless bundled entry is dropped', async () => {
+  const model = await loadModel(
+    ctx({
+      getJson: async (path: string) =>
+        path === '/api/data-marts'
+          ? { items: marts, total: marts.length, nextOffset: null }
+          : path === '/api/connectors'
+            ? [null, { title: 'No name' }, { name: 'FacebookAds', title: 'Facebook Ads', logo: 'https://x/fb.png' }]
+            : path === '/api/data-marts/scheduled-triggers'
+              ? {}
+              : [],
+    }),
+  )
+  const fb = model.sources.find(s => s.key === 'FacebookAds')
+  assert.equal(fb?.name, 'Facebook Ads')
+  assert.equal(fb?.logo, undefined)
 })
