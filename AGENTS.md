@@ -12,8 +12,8 @@ about the OWOX plugin contract.
 
 ## This plugin
 
-- Read-only on open. Reading is data marts, storages, destinations, `/api/connectors` and
-  `/api/reports`, plus two batch POSTs that are queries — `/api/data-marts/data-quality/summaries`
+- Read-only on open. Reading is data marts, storages, destinations, `/api/connectors`,
+  `/api/connectors/custom/summaries` and `/api/reports`, plus two batch POSTs that are queries — `/api/data-marts/data-quality/summaries`
   and `/api/data-marts/health-status` each take ids and return states.
 - Two POSTs do write, and only when a person presses **Check Quality & Freshness** beside the Data
   Marts count: `/api/data-marts/data-quality/runs/batch` and `/api/data-marts/data-last-updated/refresh`.
@@ -29,8 +29,13 @@ about the OWOX plugin contract.
 - A data mart's picked `icon` and its `contexts` (each with its own `icon`) come from the same mart
   list, so they cost no request either. An icon is a recommended key or `lucide:<name>`; the full
   lucide set is a lazy chunk (`src/icons/catalog.ts`) loaded only when such a value is on screen.
-- Custom connectors cannot be read: `/api/connectors/custom` refuses plugin tokens outright, so a
-  custom source shows initials, no builder link, and one card per connector name.
+- Custom connectors are read through `/api/connectors/custom/summaries?names=…`, one `optional()`
+  request, asked only for connector names the bundled list lacks (an exact-case bundled name wins).
+  Its `data:image/...;base64,` logos are the only ones shown; anything else is initials. A source
+  card is a service, not a connector: custom connectors whose API hosts share a registered domain
+  (auth-only hosts and shared cloud domains aside, see `serviceKey`) fold into one card. The builder
+  link appears only on a card with exactly one custom connector. Where the endpoint is missing or
+  refused, it is one card per connector name with initials, as before.
 - No persistent storage: `plugin.json` declares no `collections`, and the sandbox has no
   localStorage/IndexedDB/cookies. State lives in memory for the session only.
 
