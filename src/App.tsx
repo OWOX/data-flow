@@ -715,7 +715,17 @@ function SourcesBlock({ state, ctx, model, sourceCards, pending, band }: Page) {
           tone={source.tone}
           mark={<Logo name={source.name} logo={source.logo} />}
           title={source.name}
-          hint={source.key}
+          link={
+            source.connectors.length === 1 && source.connectors[0].id
+              ? `/ui/${ctx.projectId}/connectors/builder/${encodeURIComponent(source.connectors[0].id)}`
+              : undefined
+          }
+          linkTitle="Open this connector in the builder"
+          hint={
+            source.connectors.length > 1
+              ? source.connectors.map(c => c.title).join(', ')
+              : (source.connectors[0]?.name ?? source.key)
+          }
           badge={count(source.marts, 'data mart')}
         />
       ))}

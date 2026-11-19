@@ -2,7 +2,7 @@
 // lines connect them. Run with `npm test` — node strips the types, so this needs no test framework.
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { loadModel, qualityTone, recent, tone, worst } from './owox.ts'
+import { customLogo, loadModel, qualityTone, recent, serviceKey, tone, worst } from './owox.ts'
 import { reach } from './wires.ts'
 
 const marts = [
@@ -313,4 +313,105 @@ test('a run outside the window stops counting', () => {
   // A destination whose only failure is a year old is untested, not failing.
   assert.equal(tone([recent(ago(394)) ? 'FAILED' : undefined]), 'idle')
   assert.equal(tone([recent(ago(2)) ? 'FAILED' : undefined]), 'bad')
+})
+
+test('serviceKey names the service behind a set of API hosts', () => {
+  assert.equal(serviceKey(['owox.fibery.io'], 'x'), 'service:fibery.io')
+  assert.equal(serviceKey(['acme.fibery.io'], 'x'), serviceKey(['owox.fibery.io'], 'y'))
+  assert.equal(serviceKey(['platform.brexapis.com'], 'x'), 'service:brexapis.com')
+  assert.equal(
+    serviceKey(['sandbox-quickbooks.api.intuit.com', 'oauth.platform.intuit.com'], 'x'),
+    'service:intuit.com',
+  )
+  // Shared cloud domains keep the whole host, so two Google APIs stay two services.
+  const a = serviceKey(['analyticsdata.googleapis.com', 'oauth2.googleapis.com'], 'x')
+  const b = serviceKey(['searchconsole.googleapis.com', 'oauth2.googleapis.com'], 'x')
+  assert.equal(a, 'service:analyticsdata.googleapis.com')
+  assert.notEqual(a, b)
+  // Two-level public suffixes, case, and ties going to the first host.
+  assert.equal(serviceKey(['API.Example.CO.UK'], 'x'), 'service:example.co.uk')
+  assert.equal(serviceKey(['a.one.com', 'b.two.com'], 'x'), 'service:one.com')
+  assert.equal(serviceKey(['a.one.com', 'b.two.com', 'c.two.com'], 'x'), 'service:two.com')
+  // Nothing usable: today's key.
+  assert.equal(serviceKey([], 'Fibery'), 'Fibery')
+  assert.equal(serviceKey(['oauth2.example.com'], 'Fibery'), 'Fibery')
+})
+
+test('a custom logo must be an inline image', () => {
+  assert.equal(customLogo('data:image/png;base64,AAA'), 'data:image/png;base64,AAA')
+  assert.equal(customLogo('DATA:IMAGE/SVG+XML;BASE64,AAA'), 'DATA:IMAGE/SVG+XML;BASE64,AAA')
+  assert.equal(customLogo('https://x/logo.png'), undefined)
+  assert.equal(customLogo('data:text/html;base64,AAA'), undefined)
+  assert.equal(customLogo('data:image/svg+xml,<svg/>'), undefined)
+  assert.equal(customLogo(null), undefined)
+})
+
+const customMarts = [
+  { id: 'f1', title: 'Contracts', status: 'PUBLISHED', definitionType: 'CONNECTOR', connectorSourceName: 'FiberyContracts', storage: { title: 'BigQuery', type: 'GOOGLE_BIGQUERY' } },
+  { id: 'f2', title: 'Own', status: 'PUBLISHED', definitionType: 'CONNECTOR', connectorSourceName: 'fibery-owox', storage: { title: 'BigQuery', type: 'GOOGLE_BIGQUERY' } },
+  { id: 'f3', title: 'Accounts', status: 'PUBLISHED', definitionType: 'CONNECTOR', connectorSourceName: 'FiberyService', storage: { title: 'BigQuery', type: 'GOOGLE_BIGQUERY' } },
+]
+const summaries = [
+  { id: 'c1', name: 'FiberyContracts', title: 'Fibery — Client Contracts', logo: 'https://x/a.png', hosts: ['owox.fibery.io'] },
+  { id: 'c2', name: 'Fibery-Owox', title: 'Fibery (owox.fibery.io)', logo: 'data:image/svg+xml;base64,PHN2Zz4=', hosts: ['owox.fibery.io'] },
+  { id: 'c3', name: 'FiberyService', title: 'Fibery — Service Accounts', logo: null, hosts: ['acme.fibery.io'] },
+]
+const customCtx = (list: unknown, requested: string[][] = [], bundled: unknown[] = []) =>
+  ctx({
+    getJson: async (path: string, query?: { names?: string }) => {
+      if (path === '/api/data-marts') return { items: customMarts, total: 3, nextOffset: null }
+      if (path === '/api/connectors') return bundled
+      if (path === '/api/connectors/custom/summaries') {
+        requested.push(query!.names!.split(','))
+        if (list instanceof Error) throw list
+        return list
+      }
+      return path === '/api/data-marts/scheduled-triggers' ? {} : []
+    },
+  })
+
+test('custom connectors of one service collapse into one source card', async () => {
+  const requested: string[][] = []
+  const model = await loadModel(customCtx(summaries, requested))
+  assert.equal(requested.length, 1)
+  assert.deepEqual(requested[0].sort(), ['FiberyContracts', 'FiberyService', 'fibery-owox'])
+  assert.equal(model.sources.length, 1)
+  const [source] = model.sources
+  assert.equal(source.name, 'Fibery')
+  assert.equal(source.marts, 3)
+  assert.equal(source.key, 'service:fibery.io')
+  assert.equal(source.logo, 'data:image/svg+xml;base64,PHN2Zz4=')
+  assert.deepEqual(source.connectors.map(c => c.id).sort(), ['c1', 'c2', 'c3'])
+  // The wire still leaves the card, to the one place all three land.
+  assert.equal(model.wires.filter(w => w.kind === 'source' && w.from === 'src-service-fibery-io').length, 1)
+  const { lit } = reach(model.wires, model.chains, 'src-service-fibery-io')
+  assert.equal(lit.has('dm-f1'), true)
+})
+
+test('a bundled name of the same case beats a custom connector', async () => {
+  const requested: string[][] = []
+  const model = await loadModel(
+    customCtx(summaries, requested, [{ name: 'FiberyContracts', title: 'Fibery Bundled' }]),
+  )
+  assert.equal(requested[0].includes('FiberyContracts'), false)
+  const bundled = model.sources.find(s => s.key === 'FiberyContracts')
+  assert.equal(bundled?.name, 'Fibery Bundled')
+  assert.equal(bundled?.connectors[0].id, undefined)
+  assert.equal(model.sources.length, 2)
+})
+
+test('no summaries leaves one card per connector name, with initials', async () => {
+  for (const list of [[], new Error('404')]) {
+    const model = await loadModel(customCtx(list))
+    assert.deepEqual(model.sources.map(s => s.key).sort(), ['FiberyContracts', 'FiberyService', 'fibery-owox'])
+    assert.equal(model.sources.every(s => s.logo === undefined && s.marts === 1), true)
+    assert.equal(model.wires.filter(w => w.kind === 'source').length, 3)
+  }
+})
+
+test('no custom names means no summaries request', async () => {
+  const base = (ctx() as never as { owox: { getJson: (p: string) => Promise<unknown> } }).owox.getJson
+  const paths: string[] = []
+  await loadModel(ctx({ getJson: (p: string) => (paths.push(p), base(p)) }))
+  assert.equal(paths.includes('/api/connectors/custom/summaries'), false)
 })

@@ -95,14 +95,27 @@ export function tone(statuses: Array<string | undefined>): Tone {
   return bad ? 'bad' : 'ok'
 }
 
-export type Source = { key: string; name: string; logo?: string; marts: number; tone: Tone }
+/** One connector behind a source card. `id` is set for custom connectors, which have a builder page. */
+export type SourceConnector = { name: string; title: string; id?: string }
+
+export type Source = {
+  key: string
+  name: string
+  logo?: string
+  marts: number
+  tone: Tone
+  connectors: SourceConnector[]
+}
 
 export type Mart = {
   id: string
   title: string
   kind: OWOXDataMart['definitionType']
   draft: boolean
+  /** The connector's name, as the mart states it. */
   source?: string
+  /** The source card it belongs to: a service key for a custom connector, the name for a bundled one. */
+  sourceKey?: string
   storage: string
   storageType: string
   /** The storage that holds it. Two storages can share a title, so the id is what wires it. */
@@ -295,6 +308,68 @@ async function optional<T>(load: () => Promise<T>, fallback: T): Promise<T> {
 }
 
 type Connector = { name: string; title?: string | null; logo?: unknown }
+type ConnectorSummary = { id: string; name: string; title: string; logo: string | null; hosts: string[] }
+
+const AUTH_LABELS = new Set(['oauth', 'oauth2', 'auth', 'accounts', 'login', 'sso', 'token'])
+const TWO_LEVEL_SUFFIXES = new Set([
+  'co.uk', 'org.uk', 'ac.uk', 'com.au', 'net.au', 'co.nz', 'co.jp', 'co.in', 'com.br', 'com.mx',
+  'co.za', 'com.tr', 'com.ua', 'com.sg', 'com.hk',
+])
+/** Domains many unrelated services share, where the registered domain says nothing about whose it is. */
+const SHARED_DOMAINS = new Set([
+  'googleapis.com', 'amazonaws.com', 'azurewebsites.net', 'windows.net', 'appspot.com',
+  'cloudfunctions.net', 'run.app', 'herokuapp.com', 'vercel.app', 'netlify.app', 'workers.dev',
+  'firebaseio.com',
+])
+
+/** The registered domain of a host, or the whole host on a shared cloud domain. */
+function registeredDomain(host: string): string {
+  const labels = host.split('.').filter(Boolean)
+  if (labels.length <= 2) return labels.join('.')
+  const two = labels.slice(-2).join('.')
+  if (TWO_LEVEL_SUFFIXES.has(two)) return labels.slice(-3).join('.')
+  return SHARED_DOMAINS.has(two) ? labels.join('.') : two
+}
+
+/** The registered domain a set of API hosts agrees on, without its prefix; undefined with no hosts. */
+export function serviceDomain(hosts: string[]): string | undefined {
+  const counts = new Map<string, number>()
+  for (const raw of hosts) {
+    const host = raw.trim().toLowerCase()
+    if (!host || AUTH_LABELS.has(host.split('.')[0])) continue
+    const domain = registeredDomain(host)
+    counts.set(domain, (counts.get(domain) ?? 0) + 1)
+  }
+  let best: string | undefined
+  // Map keeps insertion order, so a tie goes to the host that came first.
+  for (const [domain, n] of counts) if (!best || n > counts.get(best)!) best = domain
+  return best
+}
+
+/**
+ * What a custom connector is a connector *of*: connectors that call the same service share a key.
+ * The prefix keeps it from ever equalling a connector name. No usable host falls back to `fallback`.
+ */
+export function serviceKey(hosts: string[], fallback: string): string {
+  const domain = serviceDomain(hosts)
+  return domain ? `service:${domain}` : fallback
+}
+
+const DATA_IMAGE = /^data:image\/[a-z0-9.+-]+;base64,/i
+/** A custom connector's logo is shown only when it is an inline image. */
+export const customLogo = (logo: unknown): string | undefined =>
+  typeof logo === 'string' && DATA_IMAGE.test(logo) ? logo : undefined
+
+/** The longest leading run of whole words every title shares, without trailing punctuation. */
+function commonTitle(titles: string[]): string {
+  const words = titles.map(t => t.trim().split(/\s+/))
+  const shared: string[] = []
+  for (let i = 0; i < words[0].length; i++) {
+    if (words.every(w => w[i] !== undefined && w[i].toLowerCase() === words[0][i].toLowerCase())) shared.push(words[0][i])
+    else break
+  }
+  return shared.join(' ').replace(/[\s\-–—:;,.()[\]{}|/]+$/u, '').trim()
+}
 type RawReport = {
   id?: string
   title?: string
@@ -523,8 +598,25 @@ export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) =
     .map(storage => storage.id)
   weight.storages = Math.max(1, walkable.length)
 
-  const [connectors, rawReports, triggers, quality, health, canvas] = await Promise.all([
-    track(optional(() => ctx.owox.getJson<Connector[]>('/api/connectors'), []), c => ({ sources: c.length })),
+  const [{ bundled: connectors, custom }, rawReports, triggers, quality, health, canvas] = await Promise.all([
+    // Bundled connectors first; only the names it does not hold are asked about as custom ones.
+    track(
+      optional(async () => {
+        const bundled = await optional(() => ctx.owox.getJson<Connector[]>('/api/connectors'), [])
+        const have = new Set(bundled.map(c => c.name))
+        const names = [...new Set(dataMarts.map(m => m.connectorSourceName))].filter(
+          (n): n is string => Boolean(n) && !have.has(n as string),
+        )
+        const custom =
+          names.length === 0
+            ? []
+            : await ctx.owox.getJson<ConnectorSummary[]>('/api/connectors/custom/summaries', {
+                names: names.join(','),
+              })
+        return { bundled, custom: Array.isArray(custom) ? custom : [] }
+      }, { bundled: [] as Connector[], custom: [] as ConnectorSummary[] }),
+      c => ({ sources: c.bundled.length + c.custom.length }),
+    ),
     track(optional(() => ctx.owox.getJson<RawReport[]>('/api/reports'), []), r => ({ reports: r.length })),
     track(optional(() => ctx.owox.getJson<{ triggers?: Trigger[] }>('/api/data-marts/scheduled-triggers'), {})),
     track(
@@ -557,6 +649,14 @@ export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) =
   const connectorRunBy = new Map((health.items ?? []).map(row => [row.dataMartId, row.connector?.status]))
 
   const connectorBy = new Map(connectors.map(c => [c.name, c]))
+  const customBy = new Map(custom.map(c => [c.name.toLowerCase(), c]))
+  /** The custom connector a mart's connector name stands for; a bundled name of the same case wins. */
+  const customFor = (name: string) => (connectorBy.has(name) ? undefined : customBy.get(name.toLowerCase()))
+  /** The one place a mart's connector name becomes the key of its source card. */
+  const sourceKeyOf = (name: string) => {
+    const summary = customFor(name)
+    return summary ? serviceKey(summary.hosts ?? [], name) : name
+  }
   const qualityBy = new Map((quality.items ?? []).map(row => [row.dataMartId, row.summary ?? undefined]))
   const known = new Set(dataMarts.map(m => m.id))
   const destinationBy = new Map(destinations.map(d => [d.id, d]))
@@ -614,6 +714,7 @@ export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) =
         kind: m.definitionType ?? null,
         draft: m.status === 'DRAFT',
         source: m.connectorSourceName,
+        sourceKey: m.connectorSourceName ? sourceKeyOf(m.connectorSourceName) : undefined,
         storage: m.storage?.title ?? 'Unknown storage',
         storageType: m.storage?.type ?? 'UNKNOWN',
         storageId: place(m),
@@ -645,19 +746,39 @@ export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) =
    * about the source — and the worst of them wins outright: one failed pull is a failed source.
    */
   const sourceRuns = new Map<string, Tone[]>()
+  /** The connectors behind each source, in first-seen order. */
+  const grouped = new Map<string, Map<string, SourceConnector & { logo?: string }>>()
   for (const mart of marts) {
-    if (!mart.source) continue
-    const connector = connectorBy.get(mart.source)
-    const source = sources.get(mart.source) ?? {
-      key: mart.source,
-      name: connector?.title || mart.source,
-      logo: typeof connector?.logo === 'string' ? connector.logo : undefined,
-      marts: 0,
-      tone: 'idle' as Tone,
-    }
+    if (!mart.source || !mart.sourceKey) continue
+    const key = mart.sourceKey
+    const source = sources.get(key) ?? { key, name: mart.source, marts: 0, tone: 'idle' as Tone, connectors: [] }
     source.marts += 1
-    sources.set(mart.source, source)
-    sourceRuns.set(mart.source, [...(sourceRuns.get(mart.source) ?? []), tone([connectorRunBy.get(mart.id)])])
+    sources.set(key, source)
+    sourceRuns.set(key, [...(sourceRuns.get(key) ?? []), tone([connectorRunBy.get(mart.id)])])
+    const members = grouped.get(key) ?? new Map()
+    if (!members.has(mart.source)) {
+      const bundled = connectorBy.get(mart.source)
+      const summary = customFor(mart.source)
+      members.set(mart.source, {
+        name: mart.source,
+        title: bundled?.title || summary?.title || mart.source,
+        id: summary?.id,
+        logo: summary ? customLogo(summary.logo) : typeof bundled?.logo === 'string' ? bundled.logo : undefined,
+      })
+    }
+    grouped.set(key, members)
+  }
+  for (const [key, source] of sources) {
+    const members = [...(grouped.get(key)?.values() ?? [])]
+    source.connectors = members.map(({ name, title, id }) => (id ? { name, title, id } : { name, title }))
+    source.logo = members.find(m => m.logo)?.logo
+    if (members.length === 1) source.name = members[0].title
+    else {
+      const common = commonTitle(members.map(m => m.title))
+      const domain = serviceDomain(custom.filter(c => members.some(m => m.name === c.name)).flatMap(c => c.hosts ?? []))
+      const label = domain?.split('.')[0] ?? ''
+      source.name = common || (label ? label[0].toUpperCase() + label.slice(1) : members[0].title)
+    }
   }
   for (const [key, source] of sources) source.tone = worst(sourceRuns.get(key) ?? [])
 
@@ -721,11 +842,11 @@ function drawWires(
   for (const mart of marts) {
     // Where the storage cannot be seen, the block stands for it: the mart is in one of them.
     const holder = mart.storageId ? storeId(mart.storageId) : STORAGES_BLOCK
-    if (mart.source && sources.has(mart.source)) {
-      const key = `${mart.source}>${holder}`
+    if (mart.sourceKey && sources.has(mart.sourceKey)) {
+      const key = `${mart.sourceKey}>${holder}`
       if (!landed.has(key)) {
         landed.add(key)
-        wires.push({ from: sourceId(mart.source), to: holder, kind: 'source' })
+        wires.push({ from: sourceId(mart.sourceKey), to: holder, kind: 'source' })
       }
     }
     wires.push({ from: holder, to: martId(mart.id), kind: 'held' })
@@ -787,7 +908,7 @@ function traceChains(
     if (!destination && !mart) continue
     chains.push(
       [
-        mart?.source && sources.has(mart.source) ? sourceId(mart.source) : undefined,
+        mart?.sourceKey && sources.has(mart.sourceKey) ? sourceId(mart.sourceKey) : undefined,
         // A block stands where a card cannot be seen, so the chain runs through it unbroken.
         mart ? (mart.storageId ? storeId(mart.storageId) : STORAGES_BLOCK) : undefined,
         mart ? martId(mart.id) : undefined,
@@ -800,7 +921,7 @@ function traceChains(
   for (const mart of marts) {
     if (mart.reports > 0) continue
     const chain = [
-      mart.source && sources.has(mart.source) ? sourceId(mart.source) : undefined,
+      mart.sourceKey && sources.has(mart.sourceKey) ? sourceId(mart.sourceKey) : undefined,
       mart.storageId ? storeId(mart.storageId) : STORAGES_BLOCK,
       martId(mart.id),
     ].filter((id): id is string => Boolean(id))
