@@ -376,9 +376,9 @@ function cleanSummary(row: unknown): ConnectorSummary[] {
   ]
 }
 
-const DATA_IMAGE = /^data:image\/[a-z0-9.+-]+;base64,/i
-/** A custom connector's logo is shown only when it is an inline image. */
-export const customLogo = (logo: unknown): string | undefined =>
+const DATA_IMAGE = /^data:image\/[a-z0-9.+-]+;base64,[\s\S]+$/i
+/** A connector's logo, bundled or custom, is shown only when it is an inline image. */
+export const connectorLogo = (logo: unknown): string | undefined =>
   typeof logo === 'string' && DATA_IMAGE.test(logo) ? logo : undefined
 
 /** The longest leading run of whole words every title shares, without trailing punctuation. */
@@ -624,7 +624,8 @@ export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) =
     track(
       optional(async () => {
         const read = await optional<Connector[] | null>(() => ctx.owox.getJson<Connector[]>('/api/connectors'), null)
-        const bundled = Array.isArray(read) ? read : []
+        // A null or nameless entry would break every lookup by name, so it is dropped.
+        const bundled = Array.isArray(read) ? read.filter((c): c is Connector => typeof c?.name === 'string') : []
         const have = new Set(bundled.map(c => c.name))
         // Without the bundled list, a bundled name cannot be told from a custom one, so none is asked.
         const names = !Array.isArray(read)
@@ -799,7 +800,7 @@ export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) =
         name: summary?.name ?? mart.source,
         title: bundled?.title || summary?.title || mart.source,
         id: summary?.id,
-        logo: summary ? customLogo(summary.logo) : typeof bundled?.logo === 'string' ? bundled.logo : undefined,
+        logo: connectorLogo(summary ? summary.logo : bundled?.logo),
       })
     }
     grouped.set(key, members)

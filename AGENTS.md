@@ -31,7 +31,8 @@ about the OWOX plugin contract.
   lucide set is a lazy chunk (`src/icons/catalog.ts`) loaded only when such a value is on screen.
 - Custom connectors are read through `/api/connectors/custom/summaries?names=…`, one `optional()`
   request, asked only for connector names the bundled list lacks (an exact-case bundled name wins).
-  Its `data:image/...;base64,` logos are the only ones shown; anything else is initials. A source
+  A logo, bundled or custom, shows only as a `data:image/...;base64,` value (OWOX inlines bundled
+  ones that way at build); anything else is initials. Bundled entries without a `name` are dropped. A source
   card is a service, not a connector: custom connectors whose API hosts share a registered domain
   (auth-only hosts and shared cloud domains aside, see `serviceKey`) fold into one card. The builder
   link appears only on a card with exactly one custom connector. Where the endpoint is missing or
