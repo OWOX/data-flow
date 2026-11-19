@@ -361,6 +361,21 @@ export function serviceKey(hosts: string[], fallback: string): string {
   return domain ? `service:${domain}` : fallback
 }
 
+/** A summary row as the model can use it, or nothing: an odd row costs its own card, never the page. */
+function cleanSummary(row: unknown): ConnectorSummary[] {
+  const r = (row ?? {}) as Partial<Record<keyof ConnectorSummary, unknown>>
+  if (typeof r.id !== 'string' || typeof r.name !== 'string' || !r.id || !r.name) return []
+  return [
+    {
+      id: r.id,
+      name: r.name,
+      title: typeof r.title === 'string' && r.title ? r.title : r.name,
+      logo: typeof r.logo === 'string' ? r.logo : null,
+      hosts: Array.isArray(r.hosts) ? r.hosts.filter((h): h is string => typeof h === 'string') : [],
+    },
+  ]
+}
+
 const DATA_IMAGE = /^data:image\/[a-z0-9.+-]+;base64,/i
 /** A custom connector's logo is shown only when it is an inline image. */
 export const customLogo = (logo: unknown): string | undefined =>
@@ -608,11 +623,15 @@ export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) =
     // Bundled connectors first; only the names it does not hold are asked about as custom ones.
     track(
       optional(async () => {
-        const bundled = await optional(() => ctx.owox.getJson<Connector[]>('/api/connectors'), [])
+        const read = await optional<Connector[] | null>(() => ctx.owox.getJson<Connector[]>('/api/connectors'), null)
+        const bundled = Array.isArray(read) ? read : []
         const have = new Set(bundled.map(c => c.name))
-        const names = [...new Set(dataMarts.map(m => m.connectorSourceName))].filter(
-          (n): n is string => Boolean(n) && !have.has(n as string),
-        )
+        // Without the bundled list, a bundled name cannot be told from a custom one, so none is asked.
+        const names = !Array.isArray(read)
+          ? []
+          : [...new Set(dataMarts.map(m => m.connectorSourceName))].filter(
+              (n): n is string => Boolean(n) && !have.has(n as string),
+            )
         // Its own optional: a missing or refused endpoint costs the custom detail, not the bundled list.
         const custom =
           names.length === 0
@@ -624,7 +643,7 @@ export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) =
                   }),
                 [] as ConnectorSummary[],
               )
-        return { bundled, custom: Array.isArray(custom) ? custom : [] }
+        return { bundled, custom: Array.isArray(custom) ? custom.flatMap(cleanSummary) : [] }
       }, { bundled: [] as Connector[], custom: [] as ConnectorSummary[] }),
       // Custom connectors count once per service, so three of one service do not read as three cards.
       c => ({
