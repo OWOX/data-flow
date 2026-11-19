@@ -323,8 +323,14 @@ const SHARED_DOMAINS = new Set([
 ])
 
 /** The registered domain of a host, or the whole host on a shared cloud domain. */
-function registeredDomain(host: string): string {
-  const labels = host.split('.').filter(Boolean)
+function registeredDomain(input: string): string {
+  // Defensive: a manifest host may carry a scheme, port, path or a trailing dot.
+  const host = input.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').split(/[/?#]/)[0]
+  // IP literals have no registered domain to shorten to.
+  if (host.startsWith('[')) return host.slice(0, host.indexOf(']') + 1 || undefined)
+  const bare = host.replace(/:\d+$/, '').replace(/\.+$/, '')
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(bare)) return bare
+  const labels = bare.split('.').filter(Boolean)
   if (labels.length <= 2) return labels.join('.')
   const two = labels.slice(-2).join('.')
   if (TWO_LEVEL_SUFFIXES.has(two)) return labels.slice(-3).join('.')
@@ -336,7 +342,7 @@ export function serviceDomain(hosts: string[]): string | undefined {
   const counts = new Map<string, number>()
   for (const raw of hosts) {
     const host = raw.trim().toLowerCase()
-    if (!host || AUTH_LABELS.has(host.split('.')[0])) continue
+    if (!host || AUTH_LABELS.has(host.replace(/^[a-z][a-z0-9+.-]*:\/\//, '').split('.')[0])) continue
     const domain = registeredDomain(host)
     counts.set(domain, (counts.get(domain) ?? 0) + 1)
   }
@@ -607,15 +613,24 @@ export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) =
         const names = [...new Set(dataMarts.map(m => m.connectorSourceName))].filter(
           (n): n is string => Boolean(n) && !have.has(n as string),
         )
+        // Its own optional: a missing or refused endpoint costs the custom detail, not the bundled list.
         const custom =
           names.length === 0
             ? []
-            : await ctx.owox.getJson<ConnectorSummary[]>('/api/connectors/custom/summaries', {
-                names: names.join(','),
-              })
+            : await optional(
+                () =>
+                  ctx.owox.getJson<ConnectorSummary[]>('/api/connectors/custom/summaries', {
+                    names: names.join(','),
+                  }),
+                [] as ConnectorSummary[],
+              )
         return { bundled, custom: Array.isArray(custom) ? custom : [] }
       }, { bundled: [] as Connector[], custom: [] as ConnectorSummary[] }),
-      c => ({ sources: c.bundled.length + c.custom.length }),
+      // Custom connectors count once per service, so three of one service do not read as three cards.
+      c => ({
+        sources:
+          c.bundled.length + new Set(c.custom.map(x => serviceKey(x.hosts ?? [], x.name))).size,
+      }),
     ),
     track(optional(() => ctx.owox.getJson<RawReport[]>('/api/reports'), []), r => ({ reports: r.length })),
     track(optional(() => ctx.owox.getJson<{ triggers?: Trigger[] }>('/api/data-marts/scheduled-triggers'), {})),
@@ -655,7 +670,7 @@ export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) =
   /** The one place a mart's connector name becomes the key of its source card. */
   const sourceKeyOf = (name: string) => {
     const summary = customFor(name)
-    return summary ? serviceKey(summary.hosts ?? [], name) : name
+    return summary ? serviceKey(summary.hosts ?? [], summary.name) : name
   }
   const qualityBy = new Map((quality.items ?? []).map(row => [row.dataMartId, row.summary ?? undefined]))
   const known = new Set(dataMarts.map(m => m.id))
@@ -756,11 +771,13 @@ export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) =
     sources.set(key, source)
     sourceRuns.set(key, [...(sourceRuns.get(key) ?? []), tone([connectorRunBy.get(mart.id)])])
     const members = grouped.get(key) ?? new Map()
-    if (!members.has(mart.source)) {
+    const summary = customFor(mart.source)
+    // Two spellings of one custom connector are one member; its summary says what it is called.
+    const memberKey = summary?.id ?? mart.source
+    if (!members.has(memberKey)) {
       const bundled = connectorBy.get(mart.source)
-      const summary = customFor(mart.source)
-      members.set(mart.source, {
-        name: mart.source,
+      members.set(memberKey, {
+        name: summary?.name ?? mart.source,
         title: bundled?.title || summary?.title || mart.source,
         id: summary?.id,
         logo: summary ? customLogo(summary.logo) : typeof bundled?.logo === 'string' ? bundled.logo : undefined,
@@ -775,7 +792,7 @@ export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) =
     if (members.length === 1) source.name = members[0].title
     else {
       const common = commonTitle(members.map(m => m.title))
-      const domain = serviceDomain(custom.filter(c => members.some(m => m.name === c.name)).flatMap(c => c.hosts ?? []))
+      const domain = serviceDomain(custom.filter(c => members.some(m => m.id === c.id)).flatMap(c => c.hosts ?? []))
       const label = domain?.split('.')[0] ?? ''
       source.name = common || (label ? label[0].toUpperCase() + label.slice(1) : members[0].title)
     }
