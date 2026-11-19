@@ -413,7 +413,7 @@ test('a refused summaries call keeps the bundled connectors', async () => {
   const model = await loadModel(
     customCtx(new Error('403'), [], [{ name: 'Other', title: 'Other Title', logo: 'https://x/o.png' }]),
   )
-  // Bundled list survived: an unused bundled connector still counts, and the marts fall back to names.
+  // The refused call costs only the custom detail: each custom mart falls back to its connector name.
   assert.equal(model.sources.length, 3)
   const withBundled = await loadModel(
     ctx({
