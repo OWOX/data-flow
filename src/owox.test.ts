@@ -356,11 +356,14 @@ const summaries = [
   { id: 'c2', name: 'Fibery-Owox', title: 'Fibery (owox.fibery.io)', logo: 'data:image/svg+xml;base64,PHN2Zz4=', hosts: ['owox.fibery.io'] },
   { id: 'c3', name: 'FiberyService', title: 'Fibery — Service Accounts', logo: null, hosts: ['acme.fibery.io'] },
 ]
-const customCtx = (list: unknown, requested: string[][] = [], bundled: unknown[] = []) =>
+const customCtx = (list: unknown, requested: string[][] = [], bundled: unknown = []) =>
   ctx({
     getJson: async (path: string, query?: { names?: string }) => {
       if (path === '/api/data-marts') return { items: customMarts, total: 3, nextOffset: null }
-      if (path === '/api/connectors') return bundled
+      if (path === '/api/connectors') {
+        if (bundled instanceof Error) throw bundled
+        return bundled
+      }
       if (path === '/api/connectors/custom/summaries') {
         requested.push(query!.names!.split(','))
         if (list instanceof Error) throw list
@@ -474,4 +477,19 @@ test('no custom names means no summaries request', async () => {
   const paths: string[] = []
   await loadModel(ctx({ getJson: (p: string) => (paths.push(p), base(p)) }))
   assert.equal(paths.includes('/api/connectors/custom/summaries'), false)
+})
+
+test('a malformed summaries row costs its own card, never the page', async () => {
+  const odd = [null, { id: 'x', name: null }, { id: 'c9', name: 'FiberyService', title: 7, hosts: 'nope', logo: 3 }]
+  const model = await loadModel(customCtx([...odd, ...summaries.filter(s => s.name !== 'FiberyService')]))
+  assert.equal(model.sources.reduce((n, s) => n + s.marts, 0), 3)
+  // FiberyService has no usable hosts, so it keeps a card of its own under its name.
+  assert.equal(model.sources.some(s => s.key === 'FiberyService' && s.name === 'FiberyService'), true)
+})
+
+test('without the bundled list no name is asked about as custom', async () => {
+  const requested: string[][] = []
+  const model = await loadModel(customCtx(summaries, requested, new Error('403')))
+  assert.equal(requested.length, 0)
+  assert.equal(model.sources.length, 3)
 })
