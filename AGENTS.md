@@ -35,7 +35,8 @@ about the OWOX plugin contract.
   card is a service, not a connector: custom connectors whose API hosts share a registered domain
   (auth-only hosts and shared cloud domains aside, see `serviceKey`) fold into one card. The builder
   link appears only on a card with exactly one custom connector. Where the endpoint is missing or
-  refused, it is one card per connector name with initials, as before.
+  refused, the bundled list is kept and custom marts get one card per connector name with initials,
+  as before.
 - No persistent storage: `plugin.json` declares no `collections`, and the sandbox has no
   localStorage/IndexedDB/cookies. State lives in memory for the session only.
 

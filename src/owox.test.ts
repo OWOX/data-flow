@@ -409,6 +409,66 @@ test('no summaries leaves one card per connector name, with initials', async () 
   }
 })
 
+test('a refused summaries call keeps the bundled connectors', async () => {
+  const model = await loadModel(
+    customCtx(new Error('403'), [], [{ name: 'Other', title: 'Other Title', logo: 'https://x/o.png' }]),
+  )
+  // Bundled list survived: an unused bundled connector still counts, and the marts fall back to names.
+  assert.equal(model.sources.length, 3)
+  const withBundled = await loadModel(
+    ctx({
+      getJson: async (path: string) =>
+        path === '/api/data-marts'
+          ? { items: marts, total: marts.length, nextOffset: null }
+          : path === '/api/connectors'
+            ? [{ name: 'FacebookAds', title: 'Facebook Ads', logo: 'https://x/fb.png' }]
+            : path === '/api/connectors/custom/summaries'
+              ? Promise.reject(new Error('404'))
+              : path === '/api/data-marts/scheduled-triggers'
+                ? {}
+                : [],
+    }),
+  )
+  const fb = withBundled.sources.find(s => s.key === 'FacebookAds')
+  assert.equal(fb?.name, 'Facebook Ads')
+  assert.equal(fb?.logo, 'https://x/fb.png')
+})
+
+test('two spellings of one custom connector are one member', async () => {
+  for (const hosts of [['owox.fibery.io'], []]) {
+    const model = await loadModel(
+      ctx({
+        getJson: async (path: string) =>
+          path === '/api/data-marts'
+            ? {
+                items: [
+                  { ...customMarts[1], id: 'a', connectorSourceName: 'Fibery-Owox' },
+                  { ...customMarts[1], id: 'b', connectorSourceName: 'fibery-owox' },
+                ],
+                total: 2,
+                nextOffset: null,
+              }
+            : path === '/api/connectors/custom/summaries'
+              ? [{ id: 'c2', name: 'Fibery-Owox', title: 'Fibery', logo: null, hosts }]
+              : path === '/api/data-marts/scheduled-triggers'
+                ? {}
+                : [],
+      }),
+    )
+    assert.equal(model.sources.length, 1)
+    assert.equal(model.sources[0].connectors.length, 1)
+    assert.equal(model.sources[0].connectors[0].id, 'c2')
+    assert.equal(model.sources[0].marts, 2)
+  }
+})
+
+test('serviceKey tolerates schemes, ports, paths, dots and IP literals', () => {
+  assert.equal(serviceKey(['https://api.fibery.io:8443/v1'], 'x'), 'service:fibery.io')
+  assert.equal(serviceKey(['api.fibery.io.'], 'x'), 'service:fibery.io')
+  assert.equal(serviceKey(['10.0.0.5'], 'x'), 'service:10.0.0.5')
+  assert.equal(serviceKey(['[::1]:8080'], 'x'), 'service:[::1]')
+})
+
 test('no custom names means no summaries request', async () => {
   const base = (ctx() as never as { owox: { getJson: (p: string) => Promise<unknown> } }).owox.getJson
   const paths: string[] = []
