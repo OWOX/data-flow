@@ -386,6 +386,7 @@ test('custom connectors of one service collapse into one source card', async () 
   assert.equal(source.key, 'service:fibery.io')
   assert.equal(source.logo, 'data:image/svg+xml;base64,PHN2Zz4=')
   assert.deepEqual(source.connectors.map(c => c.id).sort(), ['c1', 'c2', 'c3'])
+  assert.deepEqual([...source.names].sort(), ['FiberyContracts', 'FiberyService', 'fibery-owox'])
   // The wire still leaves the card, to the one place all three land.
   assert.equal(model.wires.filter(w => w.kind === 'source' && w.from === 'src-service-fibery-io').length, 1)
   const { lit } = reach(model.wires, model.chains, 'src-service-fibery-io')
@@ -463,6 +464,8 @@ test('two spellings of one custom connector are one member', async () => {
     assert.equal(model.sources[0].connectors.length, 1)
     assert.equal(model.sources[0].connectors[0].id, 'c2')
     assert.equal(model.sources[0].marts, 2)
+    // The member keeps one name; the data mart list filters on each spelling, so the link needs both.
+    assert.deepEqual(model.sources[0].names, ['Fibery-Owox', 'fibery-owox'])
   }
 })
 

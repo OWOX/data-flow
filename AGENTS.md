@@ -35,7 +35,9 @@ about the OWOX plugin contract.
   ones that way at build); anything else is initials. Bundled entries without a `name` are dropped. A source
   card is a service, not a connector: custom connectors whose API hosts share a registered domain
   (auth-only hosts and shared cloud domains aside, see `serviceKey`) fold into one card. The builder
-  link appears only on a card with exactly one custom connector. Where the endpoint is missing or
+  link appears only on a card with exactly one custom connector. Every card's corner link opens the
+  app's data mart list filtered by `inputSource` over `Source.names`: each connector name its marts
+  state, as spelled, since the list compares exact strings and a folded member keeps only one. Where the endpoint is missing or
   refused, the bundled list is kept and custom marts get one card per connector name with initials,
   as before.
 - No persistent storage: `plugin.json` declares no `collections`, and the sandbox has no
