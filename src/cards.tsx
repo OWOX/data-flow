@@ -48,6 +48,7 @@ export function NodeCard({
   note,
   link,
   linkTitle,
+  actions,
   drag,
   state,
   badgeRow,
@@ -66,6 +67,8 @@ export function NodeCard({
   note?: string
   link?: string
   linkTitle?: string
+  /** Extra links in the head, before `link`. */
+  actions?: React.ReactNode
   /** Rendered rather than toggled by hand: a re-render mid-drag must not drop the ring. */
   state?: CardState
   /** Keep the badges on one line, letting the longest one truncate. */
@@ -108,6 +111,7 @@ export function NodeCard({
         <span className="dm-node-title" title={hint ?? title}>
           {title}
         </span>
+        {actions}
         {link && (
           <AppLink ctx={ctx} to={link} title={linkTitle}>
             <ExternalLink size={14} />

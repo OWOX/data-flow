@@ -105,6 +105,8 @@ export type Source = {
   marts: number
   tone: Tone
   connectors: SourceConnector[]
+  /** Every connector name its marts state, as spelled: what the app's data mart list filters on. */
+  names: string[]
 }
 
 export type Mart = {
@@ -786,8 +788,9 @@ export async function loadModel(ctx: PluginContext, onProgress?: (p: Progress) =
   for (const mart of marts) {
     if (!mart.source || !mart.sourceKey) continue
     const key = mart.sourceKey
-    const source = sources.get(key) ?? { key, name: mart.source, marts: 0, tone: 'idle' as Tone, connectors: [] }
+    const source = sources.get(key) ?? { key, name: mart.source, marts: 0, tone: 'idle' as Tone, connectors: [], names: [] }
     source.marts += 1
+    if (!source.names.includes(mart.source)) source.names.push(mart.source)
     sources.set(key, source)
     sourceRuns.set(key, [...(sourceRuns.get(key) ?? []), tone([connectorRunBy.get(mart.id)])])
     const members = grouped.get(key) ?? new Map()

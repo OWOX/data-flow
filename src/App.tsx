@@ -7,6 +7,7 @@ import {
   Database,
   FileText,
   Filter,
+  Hammer,
   KeyRound,
   Layers,
   Plug,
@@ -15,7 +16,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AddCard, Logo, MartCard, MoreCard, NodeCard, People, RunIcon, Shared, type CardState } from './cards'
+import { AddCard, AppLink, Logo, MartCard, MoreCard, NodeCard, People, RunIcon, Shared, type CardState } from './cards'
 import { ago, count, reportName, scheduleLabel, sharedFor } from './format'
 import { Block, MultiSelect, SearchBox } from './controls'
 import { DESTINATION, EXIT, STORAGE, type Mark } from './icons'
@@ -715,12 +716,22 @@ function SourcesBlock({ state, ctx, model, sourceCards, pending, band }: Page) {
           tone={source.tone}
           mark={<Logo name={source.name} logo={source.logo} />}
           title={source.name}
-          link={
-            source.connectors.length === 1 && source.connectors[0].id
-              ? `/ui/${ctx.projectId}/connectors/builder/${encodeURIComponent(source.connectors[0].id)}`
-              : undefined
+          link={`/ui/${ctx.projectId}/data-marts?filters=${encodeURIComponent(
+            JSON.stringify([{ f: 'inputSource', o: 'eq', v: source.names }]),
+          )}`}
+          linkTitle="Open its data marts in OWOX"
+          actions={
+            source.connectors.length === 1 &&
+            source.connectors[0].id && (
+              <AppLink
+                ctx={ctx}
+                to={`/ui/${ctx.projectId}/connectors/builder/${encodeURIComponent(source.connectors[0].id)}`}
+                title="Open this connector in the builder"
+              >
+                <Hammer size={14} />
+              </AppLink>
+            )
           }
-          linkTitle="Open this connector in the builder"
           hint={
             source.connectors.length > 1
               ? source.connectors.map(c => c.title).join(', ')
