@@ -30,6 +30,7 @@ import {
   idOf,
   isKind,
   sourceId,
+  sourceMartsPath,
   storeId,
   DESTINATIONS_BLOCK,
   MARTS_BLOCK,
@@ -716,9 +717,7 @@ function SourcesBlock({ state, ctx, model, sourceCards, pending, band }: Page) {
           tone={source.tone}
           mark={<Logo name={source.name} logo={source.logo} />}
           title={source.name}
-          link={`/ui/${ctx.projectId}/data-marts?filters=${encodeURIComponent(
-            JSON.stringify([{ f: 'inputSource', o: 'eq', v: source.names }]),
-          )}`}
+          link={sourceMartsPath(ctx.projectId, source.names)}
           linkTitle="Open its data marts in OWOX"
           actions={
             source.connectors.length === 1 &&

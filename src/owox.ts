@@ -109,6 +109,17 @@ export type Source = {
   names: string[]
 }
 
+/**
+ * The app's data mart list, filtered to the marts behind one source card.
+ *
+ * The list reads `filters` as `[{ f, o, v }]` and keys `inputSource` on each mart's
+ * `connectorSourceName`, compared exactly, with `eq` taking any of the values.
+ */
+export const sourceMartsPath = (projectId: string, names: string[]) =>
+  `/ui/${projectId}/data-marts?filters=${encodeURIComponent(
+    JSON.stringify([{ f: 'inputSource', o: 'eq', v: names }]),
+  )}`
+
 export type Mart = {
   id: string
   title: string

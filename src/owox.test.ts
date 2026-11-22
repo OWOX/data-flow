@@ -2,7 +2,7 @@
 // lines connect them. Run with `npm test` — node strips the types, so this needs no test framework.
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { connectorLogo, loadModel, qualityTone, recent, serviceKey, tone, worst } from './owox.ts'
+import { connectorLogo, loadModel, qualityTone, recent, serviceKey, sourceMartsPath, tone, worst } from './owox.ts'
 import { reach } from './wires.ts'
 
 const marts = [
@@ -514,4 +514,17 @@ test('a bundled logo follows the same inline-image rule, and a nameless bundled 
   const fb = model.sources.find(s => s.key === 'FacebookAds')
   assert.equal(fb?.name, 'Facebook Ads')
   assert.equal(fb?.logo, undefined)
+})
+
+test("a source card's link is the app's data mart list filtered to its connector names", () => {
+  // The exact address the app reads, as a person would copy it out of the list.
+  assert.equal(
+    sourceMartsPath('p1', ['CloudflareAnalytics']),
+    '/ui/p1/data-marts?filters=%5B%7B%22f%22%3A%22inputSource%22%2C%22o%22%3A%22eq%22%2C%22v%22%3A%5B%22CloudflareAnalytics%22%5D%7D%5D',
+  )
+  const url = new URL(sourceMartsPath('p1', ['Fibery-Owox', 'a b&c=d']), 'https://app.owox.com')
+  assert.equal(url.pathname, '/ui/p1/data-marts')
+  assert.deepEqual(JSON.parse(url.searchParams.get('filters')!), [
+    { f: 'inputSource', o: 'eq', v: ['Fibery-Owox', 'a b&c=d'] },
+  ])
 })
